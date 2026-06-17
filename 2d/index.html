@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>SFC Delteas シンプル2D - 電動車椅子サッカー</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
+  body{background:#0e1018;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;height:100vh;}
+  .wrap{max-width:760px;margin:0 auto;padding:8px;}
+  .top{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+  .btn{font:14px/1 inherit;border:1px solid rgba(255,255,255,.25);background:rgba(25,28,38,.8);color:#fff;border-radius:9px;padding:9px 12px;cursor:pointer;}
+  .btn.on{background:#2d8a3d;border-color:#2d8a3d;}.btn:active{transform:scale(.96);}
+  canvas{width:100%;display:block;background:#cda06b;border-radius:12px;border:1px solid rgba(255,255,255,.15);touch-action:none;}
+  .pad{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;}
+  .pbtn{width:56px;height:56px;font-size:24px;border:1px solid rgba(255,255,255,.25);background:rgba(25,28,38,.8);color:#fff;border-radius:12px;cursor:pointer;}
+  .pbtn:active{background:#2d8a3d;}
+  .ctl{display:flex;justify-content:center;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap;font-size:13px;color:rgba(255,255,255,.7);}
+  .hint{text-align:center;font-size:12px;color:rgba(255,255,255,.6);margin-top:6px;}
+  a.link{color:#6fce7e;font-size:13px;text-decoration:none;border:1px solid rgba(111,206,126,.5);border-radius:8px;padding:7px 12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top" id="modes">
+    <button class="btn on" data-m="cpu">1対1（対CPU）</button>
+    <button class="btn" data-m="shoot">シュート練習</button>
+    <a class="link" href="../3d/">🎮 3D版へ →</a>
+  </div>
+  <canvas id="cv"></canvas>
+  <div class="pad">
+    <div style="display:flex;gap:8px"><button class="pbtn" id="bL">↺</button><button class="pbtn" id="bR">↻</button></div>
+    <div class="hint">回転(A/D)→ガード端で<br>叩く=スピンキック</div>
+    <div style="display:flex;gap:8px"><button class="pbtn" id="bB">▼</button><button class="pbtn" id="bF">▲</button></div>
+  </div>
+  <div class="ctl">
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="vec" checked> 物理ベクトル</label>
+    <button class="btn" id="pause" style="font-size:13px">一時停止</button>
+    <button class="btn" id="reset" style="font-size:13px">リセット</button>
+    <span>↑↓←→ / WASD</span>
+  </div>
+</div>
+<script>
+(function(){
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  const W=720,H=440,dpr=Math.min(devicePixelRatio||1,2);
+  cv.width=W*dpr; cv.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  function fit(){ cv.style.height=(H*(cv.clientWidth/W))+'px'; } fit(); addEventListener('resize',fit);
+  const PPM=70, GL=14,GR=W-14,GT=14,GB=H-14, MIDY=(GT+GB)/2, GOALH=130, gTop=MIDY-GOALH/2, gBot=MIDY+GOALH/2;
+  const HX=28,HY=22,GUARD=8,BR=12, EDGE=Math.hypot(HX+GUARD,HY);
+  const MAXS=240,ACC=420,DEC=380,MO=4.6,AAC=20,ADC=16,BDEC=26,E=0.5,WE=0.6,CAP=720;
+  let mode='cpu', P,A,ball,sA,sB,paused=false,lastHit=null;
+  const inO={f:0,b:0,l:0,r:0}, keys={};
+  function chair(x,y,th,col,dk){return{x,y,th,col,dk,spd:0,om:0,vx:0,vy:0};}
+  function reset(){ P=chair(GL+120,MIDY,0,'#2d8a3d','#1b5a28'); A=chair(GR-120,MIDY,Math.PI,'#d24a45','#8a2723'); ball={x:W/2,y:MIDY,vx:0,vy:0}; sA=0;sB=0; lastHit=null; }
+  reset();
+  function nA(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
+  function upd(c,dt,thr,turn){
+    if(thr)c.spd+=Math.sign(thr)*ACC*dt; else c.spd-=Math.sign(c.spd)*Math.min(Math.abs(c.spd),DEC*dt);
+    c.spd=Math.max(-MAXS*0.6,Math.min(MAXS,c.spd)); c.spd*=0.998;
+    if(turn)c.om+=Math.sign(turn)*AAC*dt; else c.om-=Math.sign(c.om)*Math.min(Math.abs(c.om),ADC*dt);
+    c.om=Math.max(-MO,Math.min(MO,c.om)); c.om*=0.99; c.th+=c.om*dt;
+    const fx=Math.cos(c.th),fy=Math.sin(c.th); c.x+=fx*c.spd*dt; c.y+=fy*c.spd*dt; c.vx=fx*c.spd; c.vy=fy*c.spd;
+    if(c.x<GL+EDGE){c.x=GL+EDGE;if(c.spd*fx<0)c.spd*=0.3;} if(c.x>GR-EDGE){c.x=GR-EDGE;if(c.spd*fx>0)c.spd*=0.3;}
+    if(c.y<GT+EDGE){c.y=GT+EDGE;if(c.spd*fy<0)c.spd*=0.3;} if(c.y>GB-EDGE){c.y=GB-EDGE;if(c.spd*fy>0)c.spd*=0.3;}
+  }
+  function resolve(c){
+    const dx=ball.x-c.x,dy=ball.y-c.y,ct=Math.cos(c.th),st=Math.sin(c.th);
+    const lx=dx*ct+dy*st, ly=-dx*st+dy*ct, ex=HX+GUARD;
+    const cxl=Math.max(-ex,Math.min(ex,lx)),cyl=Math.max(-HY,Math.min(HY,ly));
+    let ddx=lx-cxl,ddy=ly-cyl,d=Math.hypot(ddx,ddy),nlx,nly,pen;
+    if(d>1e-6){ if(d>=BR)return; nlx=ddx/d;nly=ddy/d;pen=BR-d; }
+    else{ const dr=ex-lx,dl=lx+ex,dt2=HY-ly,db=ly+HY,m=Math.min(dr,dl,dt2,db);
+      if(m===dr){nlx=1;nly=0}else if(m===dl){nlx=-1;nly=0}else if(m===dt2){nlx=0;nly=1}else{nlx=0;nly=-1}pen=BR+m; }
+    const nx=nlx*ct-nly*st, ny=nlx*st+nly*ct, tx=-ny, tz=nx;
+    const armX=cxl*ct-cyl*st, armY=cxl*st+cyl*ct;
+    const vConX=ct*c.spd-c.om*armY, vConY=st*c.spd+c.om*armX;
+    const vRelX=ball.vx-vConX, vRelY=ball.vy-vConY, vn=vRelX*nx+vRelY*ny;
+    let vAX=vRelX, vAY=vRelY;
+    if(vn<0){ const j=-(1+E)*vn; vAX+=j*nx; vAY+=j*ny; const vt=vRelX*tx+vRelY*tz; vAX-=0.18*vt*tx; vAY-=0.18*vt*tz;
+      lastHit={px:c.x+armX,py:c.y+armY,gx:vConX,gy:vConY,t:0.6}; }
+    ball.vx=vAX+vConX; ball.vy=vAY+vConY; ball.x+=nx*pen; ball.y+=ny*pen;
+  }
+  function ai(){ // 赤: ボールを緑ゴール(左)へ押す
+    const og={x:GL,y:MIDY}; let dx=ball.x-og.x,dy=ball.y-og.y,dl=Math.hypot(dx,dy)||1;
+    const tx=ball.x+dx/dl*(HX+GUARD+BR), ty=ball.y+dy/dl*(HX+GUARD+BR);
+    const ang=Math.atan2(ty-A.y,tx-A.x),diff=nA(ang-A.th);
+    return {thr:(Math.abs(diff)<0.7&&Math.hypot(tx-A.x,ty-A.y)>6)?1:0, turn:Math.abs(diff)>0.08?Math.sign(diff):0};
+  }
+  function pin(){ let f=inO.f|(keys['w']||keys['arrowup']?1:0), b=inO.b|(keys['s']||keys['arrowdown']?1:0),
+    l=inO.l|(keys['a']||keys['arrowleft']?1:0), r=inO.r|(keys['d']||keys['arrowright']?1:0);
+    return {thr:(f?1:0)-(b?1:0), turn:(r?1:0)-(l?1:0)}; }
+  function step(dt){
+    const hi=pin(); upd(P,dt,hi.thr,hi.turn);
+    if(mode==='cpu'){ const ri=ai(); upd(A,dt,ri.thr,ri.turn); }
+    ball.x+=ball.vx*dt; ball.y+=ball.vy*dt;
+    const sp=Math.hypot(ball.vx,ball.vy); if(sp>0){const ns=Math.max(0,sp-BDEC*dt);ball.vx*=ns/sp;ball.vy*=ns/sp;}
+    const s2=Math.hypot(ball.vx,ball.vy); if(s2>CAP){ball.vx*=CAP/s2;ball.vy*=CAP/s2;}
+    resolve(P); if(mode==='cpu')resolve(A);
+    if(ball.x-BR<GL){ if(ball.y>gTop&&ball.y<gBot){sB++;ball={x:W/2,y:MIDY,vx:0,vy:0};return;} ball.x=GL+BR;ball.vx=-ball.vx*WE; }
+    if(ball.x+BR>GR){ if(ball.y>gTop&&ball.y<gBot){sA++;ball={x:W/2,y:MIDY,vx:0,vy:0};return;} ball.x=GR-BR;ball.vx=-ball.vx*WE; }
+    if(ball.y-BR<GT){ball.y=GT+BR;ball.vy=-ball.vy*WE;} if(ball.y+BR>GB){ball.y=GB-BR;ball.vy=-ball.vy*WE;}
+    if(lastHit)lastHit.t-=dt;
+  }
+  function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+  function arrow(x,y,vx,vy,col,sc){const ex=x+vx*sc,ey=y+vy*sc,a=Math.atan2(ey-y,ex-x),len=Math.hypot(ex-x,ey-y);if(len<3)return;
+    ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(ex,ey);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-9*Math.cos(a-0.4),ey-9*Math.sin(a-0.4));ctx.lineTo(ex-9*Math.cos(a+0.4),ey-9*Math.sin(a+0.4));ctx.closePath();ctx.fill();}
+  function drawChair(c){ ctx.save();ctx.translate(c.x,c.y);ctx.rotate(c.th);
+    ctx.fillStyle=c.dk;ctx.fillRect(HX-2,-HY-3,GUARD+4,2*HY+6);
+    ctx.fillStyle=c.col;ctx.strokeStyle=c.dk;ctx.lineWidth=2;rr(-HX,-HY,2*HX,2*HY,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.arc(-4,0,7,0,7);ctx.fill();ctx.restore(); }
+  function render(){
+    ctx.clearRect(0,0,W,H);ctx.fillStyle='#cda06b';ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=2;ctx.strokeRect(GL,GT,GR-GL,GB-GT);
+    ctx.beginPath();ctx.moveTo(W/2,GT);ctx.lineTo(W/2,GB);ctx.stroke();
+    ctx.beginPath();ctx.arc(W/2,MIDY,52,0,7);ctx.stroke();
+    ctx.strokeStyle='#2d8a3d';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(GL,gTop);ctx.lineTo(GL,gBot);ctx.stroke();
+    ctx.strokeStyle='#d24a45';ctx.beginPath();ctx.moveTo(GR,gTop);ctx.lineTo(GR,gBot);ctx.stroke();
+    drawChair(P); if(mode==='cpu')drawChair(A);
+    ctx.save();ctx.translate(ball.x,ball.y);ctx.fillStyle='#fff';ctx.strokeStyle='#888';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,BR,0,7);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='#bbb';ctx.beginPath();ctx.arc(-3,-3,BR*.7,.6,2.6);ctx.stroke();ctx.restore();
+    if(document.getElementById('vec').checked&&lastHit&&lastHit.t>0){const al=Math.max(0,lastHit.t/0.6);ctx.globalAlpha=al;
+      arrow(lastHit.px,lastHit.py,lastHit.gx,lastHit.gy,'#e0820f',0.18); arrow(ball.x,ball.y,ball.vx,ball.vy,'#1d9ec9',0.18);ctx.globalAlpha=1;}
+    ctx.fillStyle='rgba(0,0,0,.5)';rr(W/2-86,8,172,30,8);ctx.fill();ctx.fillStyle='#fff';ctx.font='600 17px sans-serif';ctx.textAlign='center';
+    ctx.fillText(mode==='cpu'?('YOU  '+sA+' - '+sB+'  CPU'):('シュート  '+sA+' 本'),W/2,29);
+    ctx.textAlign='left';ctx.font='12px sans-serif';ctx.fillStyle='rgba(0,0,0,.5)';rr(8,8,150,58,6);ctx.fill();ctx.fillStyle='#fff';
+    ctx.fillText('車速 '+(Math.abs(P.spd)/PPM).toFixed(1)+' m/s',16,24);
+    ctx.fillText('回転 '+P.om.toFixed(1)+' rad/s',16,40);
+    ctx.fillText('端速 '+(Math.abs(P.om)*EDGE/PPM).toFixed(1)+' m/s',16,56);
+    if(document.getElementById('vec').checked){ctx.textAlign='right';ctx.font='12px sans-serif';ctx.fillStyle='rgba(255,255,255,.95)';
+      ctx.fillText('● ガード端 v=v₀+ω×r   ● ボール速',GR-6,GB-8);ctx.textAlign='left';}
+  }
+  const h=1/120;let acc=0,last=performance.now();
+  function loop(t){let dt=(t-last)/1000;last=t;dt=Math.min(dt,0.05);
+    if(!paused){acc+=dt;let n=0;while(acc>=h&&n<8){step(h);acc-=h;n++;}}render();requestAnimationFrame(loop);}
+  requestAnimationFrame(loop);
+  function setk(k,v){k=k.toLowerCase();if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){keys[k]=v;return true;}return false;}
+  addEventListener('keydown',e=>{if(setk(e.key,true))e.preventDefault();}); addEventListener('keyup',e=>{setk(e.key,false);});
+  function hold(id,p){const b=document.getElementById(id);const on=e=>{e.preventDefault();inO[p]=1;},off=e=>{e.preventDefault();inO[p]=0;};
+    b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off);b.addEventListener('pointercancel',off);}
+  hold('bF','f');hold('bB','b');hold('bL','l');hold('bR','r');
+  document.querySelectorAll('#modes .btn').forEach(b=>b.addEventListener('click',function(){mode=this.dataset.m;[...document.querySelectorAll('#modes .btn')].forEach(x=>x.classList.toggle('on',x===this));reset();}));
+  document.getElementById('pause').addEventListener('click',function(){paused=!paused;this.textContent=paused?'再開':'一時停止';});
+  document.getElementById('reset').addEventListener('click',reset);
+})();
+</script>
+</body>
+</html>
