@@ -1,0 +1,3195 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>SFC Delteas 戦術ビューア v13</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior: none; height: 100%; }
+  body {
+    background: #0a0a14;
+    color: #fff;
+    font-family: 'Hiragino Sans', sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #topBar {
+    background: #16213e;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 2px solid #ffd700;
+  }
+  #topBar h1 { font-size: 16px; }
+  #modeLabel {
+    background: #4a9eff;
+    padding: 4px 12px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: bold;
+  }
+  #modeLabel.fps { background: #ffd700; color: #000; }
+  #modeLabel.transition { background: #ff9900; }
+  #stage { flex: 1; position: relative; overflow: hidden; }
+  canvas { display: block; }
+  #topHint {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.7);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 10;
+    pointer-events: none;
+    max-width: 260px;
+  }
+  #fpsBackBtn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 10px 18px;
+    background: #e94560;
+    color: white;
+    border: 2px solid #fff;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 20;
+    display: none;
+    cursor: pointer;
+  }
+  #fpsInfo {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0,0,0,0.75);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 10;
+    display: none;
+  }
+  /* 2Dマップビュー */
+  #map2dCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #2d5a3d;
+    display: none;
+    z-index: 5;
+    touch-action: none;
+  }
+  #map2dCanvas.show { display: block; }
+  #map2dHint {
+    position: absolute;
+    top: 60px;
+    left: 10px;
+    background: rgba(0,0,0,0.75);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 11;
+    pointer-events: none;
+    display: none;
+    max-width: 260px;
+  }
+  #map2dHint.show { display: block; }
+  #map2dBackBtn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 10px 18px;
+    background: #e94560;
+    color: white;
+    border: 2px solid #fff;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 20;
+    display: none;
+    cursor: pointer;
+  }
+  #map2dBackBtn.show { display: block; }
+  
+  /* 選手選択モーダル - カード形式 */
+  #playerSelectModal {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 30;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #playerSelectModal.show { display: flex; }
+  #modalCard {
+    background: linear-gradient(135deg, #1e2845 0%, #16213e 50%, #0d1729 100%);
+    border-radius: 18px;
+    padding: 24px;
+    max-width: 360px;
+    width: 100%;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(255, 215, 0, 0.1);
+    animation: modalIn 0.25s ease-out;
+  }
+  @keyframes modalIn {
+    from { transform: scale(0.85) translateY(20px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  #modalHeader {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  #modalAvatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4a9eff, #2a6fc0);
+    border: 3px solid #ffd700;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+  #modalAvatar.red { background: linear-gradient(135deg, #e94560, #8a2030); }
+  #modalAvatar img { width: 100%; height: 100%; object-fit: cover; }
+  #modalInfo { flex: 1; min-width: 0; }
+  #modalTeam {
+    font-size: 11px;
+    color: #aaa;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+  }
+  #modalName {
+    font-size: 20px;
+    font-weight: bold;
+    color: #fff;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  #modalNumber {
+    font-size: 12px;
+    color: #ffd700;
+    margin-top: 2px;
+    letter-spacing: 0.5px;
+  }
+  .modalBtn {
+    width: 100%;
+    padding: 14px 18px;
+    font-size: 15px;
+    background: linear-gradient(135deg, #4a9eff, #2a6fc0);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    text-align: left;
+  }
+  .modalBtn:active { transform: scale(0.98); }
+  .modalBtn .icon {
+    font-size: 22px;
+    width: 28px;
+    text-align: center;
+  }
+  .modalBtn .label {
+    flex: 1;
+  }
+  .modalBtn.primary {
+    background: linear-gradient(135deg, #ffd700, #ff9500);
+    color: #1a1a2e;
+    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+  }
+  .modalBtn.map2d {
+    background: linear-gradient(135deg, #00c9a7, #008a72);
+    box-shadow: 0 4px 12px rgba(0, 201, 167, 0.3);
+  }
+  .modalBtn.rotate {
+    background: linear-gradient(135deg, #ff9900, #cc6600);
+    box-shadow: 0 4px 12px rgba(255, 153, 0, 0.3);
+  }
+  .modalBtn.cancel {
+    background: linear-gradient(135deg, #555, #333);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    margin-top: 4px;
+  }
+  #topActions {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+  }
+  .actionBtn {
+    padding: 8px 14px;
+    font-size: 12px;
+    background: rgba(74,158,255,0.9);
+    color: white;
+    border: 2px solid #fff;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  /* === 電動車椅子コントローラー風UI === */
+  #wcController {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #2a2a3a, #1a1a26);
+    border: 2px solid #555;
+    border-radius: 14px;
+    padding: 10px 12px 12px 12px;
+    z-index: 20;
+    display: none;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.8);
+    width: 170px;
+  }
+  #wcController.show { display: block; }
+  #wcTitle {
+    color: #ffd700;
+    font-size: 9px;
+    text-align: center;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  /* スピードLED */
+  #speedBar {
+    display: flex;
+    gap: 3px;
+    background: #000;
+    padding: 4px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+  .speedLed {
+    flex: 1;
+    height: 7px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 2px;
+  }
+  .speedLed.lv1 { background: #00aa00; box-shadow: 0 0 5px #00aa00; }
+  .speedLed.lv2 { background: #88aa00; box-shadow: 0 0 5px #88aa00; }
+  .speedLed.lv3 { background: #ffaa00; box-shadow: 0 0 5px #ffaa00; }
+  .speedLed.lv4 { background: #ff4400; box-shadow: 0 0 5px #ff4400; }
+  .speedLed.lv5 { background: #ff0000; box-shadow: 0 0 5px #ff0000; }
+  /* ジョイスティック本体 */
+  #wcJoyBase {
+    position: relative;
+    width: 130px;
+    height: 130px;
+    margin: 0 auto;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #1a1a1a, #050505);
+    border: 3px solid #2a2a2a;
+    box-shadow: inset 0 3px 8px rgba(0,0,0,0.9), 0 1px 2px rgba(255,255,255,0.05);
+    touch-action: none;
+  }
+  /* 十字ガイド */
+  #wcJoyBase::before, #wcJoyBase::after {
+    content: '';
+    position: absolute;
+    background: rgba(255,255,255,0.06);
+    pointer-events: none;
+  }
+  #wcJoyBase::before { top: 50%; left: 12px; right: 12px; height: 1px; }
+  #wcJoyBase::after { left: 50%; top: 12px; bottom: 12px; width: 1px; }
+  /* スティック先端 */
+  #wcJoyKnob {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #aaa, #333);
+    border: 2px solid #666;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.7);
+    pointer-events: none;
+  }
+  /* 速度切替 */
+  #speedBtns {
+    display: flex;
+    gap: 3px;
+    margin-top: 10px;
+  }
+  .spdBtn {
+    flex: 1;
+    padding: 5px 0;
+    background: #1a1a26;
+    color: #999;
+    border: 1px solid #333;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .spdBtn.active {
+    background: #4a9eff;
+    color: #fff;
+    border-color: #fff;
+    box-shadow: 0 0 5px #4a9eff;
+  }
+  #lookStick {
+    position: absolute;
+    bottom: 30px;
+    left: 30px;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(255,215,0,0.2);
+    border: 3px solid rgba(255,215,0,0.7);
+    z-index: 20;
+    display: none;
+    touch-action: none;
+  }
+  #lookStick.show { display: block; }
+  #lookStickKnob {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(255,215,0,0.9);
+    border: 2px solid #fff;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  .stickLabel {
+    position: absolute;
+    bottom: 145px;
+    font-size: 10px;
+    color: #fff;
+    z-index: 19;
+    display: none;
+    pointer-events: none;
+    text-shadow: 0 0 4px #000;
+  }
+  .stickLabel.show { display: block; }
+  #moveLabel { display: none; }
+  #lookLabel { left: 45px; }
+  #pcHint {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    color: #ffd700;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    z-index: 10;
+    display: none;
+  }
+  #pcHint.show { display: block; }
+  
+  /* ========================================
+     タイトル画面
+  ======================================== */
+  #titleScreen {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #0d1b3d 0%, #16213e 50%, #1a1a2e 100%);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  #titleScreen.hide { display: none; }
+  #teamEmblem {
+    margin-bottom: 15px;
+    filter: drop-shadow(0 4px 12px rgba(45, 138, 61, 0.5));
+  }
+  #titleTeamName {
+    font-size: 38px;
+    font-weight: bold;
+    color: #2d8a3d;
+    text-shadow: 0 0 20px rgba(45, 138, 61, 0.6), 2px 2px 4px rgba(0,0,0,0.5);
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+    font-family: 'Georgia', serif;
+    font-style: italic;
+  }
+  #titleLogo {
+    font-size: 36px;
+    font-weight: bold;
+    background: linear-gradient(135deg, #ffd700 0%, #ff9500 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    margin-bottom: 8px;
+    line-height: 1.2;
+    text-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+  }
+  #titleSub {
+    font-size: 14px;
+    color: #aaa;
+    margin-bottom: 40px;
+    letter-spacing: 2px;
+  }
+  .titleBtn {
+    width: 280px;
+    padding: 16px 24px;
+    margin: 8px 0;
+    font-size: 17px;
+    font-weight: bold;
+    background: linear-gradient(135deg, #4a9eff, #2a6fc0);
+    color: white;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .titleBtn:active { transform: scale(0.97); }
+  .titleBtn:hover { box-shadow: 0 6px 20px rgba(74, 158, 255, 0.4); }
+  .titleBtn .icon { font-size: 24px; }
+  .titleBtn.primary {
+    background: linear-gradient(135deg, #ffd700, #ff9500);
+    color: #1a1a2e;
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.5);
+  }
+  .titleBtn.secondary {
+    background: linear-gradient(135deg, #555, #333);
+  }
+  #titleFooter {
+    position: absolute;
+    bottom: 20px;
+    color: #666;
+    font-size: 11px;
+  }
+  
+  /* ========================================
+     アバター設定画面
+  ======================================== */
+  #avatarScreen {
+    position: fixed;
+    inset: 0;
+    background: #16213e;
+    z-index: 900;
+    display: none;
+    flex-direction: column;
+    padding: 14px;
+    overflow-y: auto;
+  }
+  #avatarScreen.show { display: flex; }
+  #avatarHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #ffd700;
+    margin-bottom: 14px;
+  }
+  #avatarHeader h2 { font-size: 18px; color: #ffd700; }
+  .smallBtn {
+    padding: 8px 16px;
+    background: #4a9eff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .smallBtn.danger { background: #e94560; }
+  .teamSection {
+    margin-bottom: 16px;
+  }
+  .teamTitle {
+    font-size: 13px;
+    color: #ffd700;
+    margin-bottom: 8px;
+    padding-left: 4px;
+  }
+  .charCard {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .charCard.blue { border-left: 4px solid #4a9eff; }
+  .charCard.red { border-left: 4px solid #e94560; }
+  .charAvatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2a2a3a, #1a1a26);
+    border: 2px solid #555;
+    flex-shrink: 0;
+    overflow: hidden;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #888;
+  }
+  .charAvatar img { width: 100%; height: 100%; object-fit: cover; }
+  .charAvatar:hover { border-color: #ffd700; }
+  .charInfo { flex: 1; min-width: 0; }
+  .charNumber {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 4px;
+  }
+  .charNameInput {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    font-size: 14px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-family: inherit;
+    width: 100%;
+  }
+  .charNameInput:focus {
+    outline: none;
+    border-color: #ffd700;
+  }
+  .charRemoveBtn {
+    padding: 4px 10px;
+    background: #333;
+    color: #aaa;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .charRemoveBtn:hover { background: #e94560; color: white; }
+  #faceFileInput { display: none; }
+</style>
+</head>
+<body>
+
+<!-- タイトル画面 -->
+<div id="titleScreen">
+  <!-- チームエンブレム (DEL since 1997) -->
+  <svg id="teamEmblem" viewBox="0 0 200 200" width="140" height="140">
+    <!-- 中央の円 -->
+    <circle cx="100" cy="100" r="50" fill="#2d8a3d" stroke="#fff" stroke-width="3"/>
+    <!-- 外側の三角形パターン（12個の三角形を放射状に） -->
+    <g id="emblemTriangles">
+      <!-- 各三角形は JavaScript で生成 -->
+    </g>
+    <!-- 中央テキスト -->
+    <text x="100" y="100" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="22" font-weight="bold" font-family="serif">DEL</text>
+    <text x="100" y="120" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-family="serif">since 1997</text>
+  </svg>
+  
+  <div id="titleTeamName">SFC Delteas</div>
+  <div id="titleSub">POWERCHAIR FOOTBALL TACTICAL VIEWER</div>
+  
+  <button class="titleBtn primary" id="btnStart">
+    <span class="icon">🏟️</span>
+    <span>戦術ビューアを始める</span>
+  </button>
+  <button class="titleBtn" id="btnAvatar">
+    <span class="icon">👤</span>
+    <span>選手アバター設定</span>
+  </button>
+  <button class="titleBtn secondary" id="btnHelp">
+    <span class="icon">❓</span>
+    <span>遊び方</span>
+  </button>
+  
+  <div id="titleFooter">v13.0 © SFC Delteas Tactical Viewer</div>
+</div>
+
+<!-- アバター設定画面 -->
+<div id="avatarScreen">
+  <div id="avatarHeader">
+    <h2>👤 選手アバター設定</h2>
+    <div style="display:flex;gap:8px;">
+      <button class="smallBtn danger" id="btnResetAvatars">初期化</button>
+      <button class="smallBtn" id="btnAvatarBack">完了</button>
+    </div>
+  </div>
+  <div id="avatarList"></div>
+  <input type="file" id="faceFileInput" accept="image/*">
+</div>
+
+<div id="topBar">
+  <h1>⚽ SFC Delteas</h1>
+  <div id="modeLabel">📐 俯瞰モード</div>
+  <button class="smallBtn" id="btnHome" style="padding:4px 10px;font-size:11px;">🏠</button>
+</div>
+
+<div id="stage">
+  <div id="topHint">選手/ボールをタップ → 視点切替/操作<br>長押しドラッグ → 配置変更</div>
+  <button id="fpsBackBtn">⬅ 俯瞰に戻る</button>
+  <div id="fpsInfo"></div>
+  <div id="topActions">
+    <button class="actionBtn" id="resetBtn">配置リセット</button>
+  </div>
+  <div id="playerSelectModal">
+    <div id="modalCard">
+      <div id="modalHeader">
+        <div id="modalAvatar"></div>
+        <div id="modalInfo">
+          <div id="modalTeam"></div>
+          <div id="modalName"></div>
+          <div id="modalNumber"></div>
+        </div>
+      </div>
+      <button class="modalBtn primary" id="fpsBtn">
+        <span class="icon">👁</span>
+        <span class="label">この選手の目線で見る (3D)</span>
+      </button>
+      <button class="modalBtn map2d" id="map2dBtn">
+        <span class="icon">🗺️</span>
+        <span class="label">2Dマップで操作する</span>
+      </button>
+      <button class="modalBtn rotate" id="rotateBtn">
+        <span class="icon">↻</span>
+        <span class="label">45度回転</span>
+      </button>
+      <button class="modalBtn cancel" id="cancelBtn">
+        <span class="icon">✕</span>
+        <span class="label">キャンセル</span>
+      </button>
+    </div>
+  </div>
+  
+  <!-- 2Dマップビュー（オーバーレイ） -->
+  <canvas id="map2dCanvas"></canvas>
+  <button id="map2dBackBtn">⬅ 3Dビューに戻る</button>
+  <div id="map2dHint">
+    ジョイスティック・スティック操作で動く<br>
+    ボールに当てて転がそう
+  </div>
+  <div class="stickLabel" id="lookLabel">視点</div>
+  <div id="lookStick"><div id="lookStickKnob"></div></div>
+  
+  <!-- 電動車椅子コントローラー -->
+  <div id="wcController">
+    <div id="wcTitle">⚙ POWER CHAIR CONTROL</div>
+    <div id="speedBar">
+      <div class="speedLed"></div>
+      <div class="speedLed"></div>
+      <div class="speedLed"></div>
+      <div class="speedLed"></div>
+      <div class="speedLed"></div>
+    </div>
+    <div id="wcJoyBase">
+      <div id="wcJoyKnob"></div>
+    </div>
+    <div id="speedBtns">
+      <button class="spdBtn" data-speed="1">1</button>
+      <button class="spdBtn active" data-speed="2">2</button>
+      <button class="spdBtn" data-speed="3">3</button>
+      <button class="spdBtn" data-speed="4">4</button>
+      <button class="spdBtn" data-speed="5">5</button>
+    </div>
+  </div>
+  <div id="pcHint">WASD/矢印=ジョイスティック / 数字1-5=速度切替 / マウスドラッグ=視点 / Esc=戻る</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ========================================
+// 選手アバターデータ管理
+// ========================================
+const PLAYER_LIST = [
+  { id: 'b6',  team: 'blue', number: '6',  defaultName: '中村(K)' },
+  { id: 'b7',  team: 'blue', number: '7',  defaultName: 'デル-7' },
+  { id: 'b10', team: 'blue', number: '10', defaultName: 'デル-10' },
+  { id: 'b1',  team: 'blue', number: '1',  defaultName: 'デルGK' },
+  { id: 'r9',  team: 'red',  number: '9',  defaultName: '赤-9' },
+  { id: 'r11', team: 'red',  number: '11', defaultName: '赤-11' },
+  { id: 'r6',  team: 'red',  number: '6',  defaultName: '赤-6' },
+  { id: 'r1',  team: 'red',  number: '1',  defaultName: '赤GK' }
+];
+
+let avatarData = loadAvatarData();
+function loadAvatarData() {
+  try {
+    const saved = localStorage.getItem('pcs_avatars_v11');
+    if (saved) {
+      const data = JSON.parse(saved);
+      return PLAYER_LIST.map(p => {
+        const f = data.find(d => d.id === p.id);
+        return f ? { ...p, name: f.name || p.defaultName, face: f.face || null }
+                 : { ...p, name: p.defaultName, face: null };
+      });
+    }
+  } catch (e) { console.warn(e); }
+  return PLAYER_LIST.map(p => ({ ...p, name: p.defaultName, face: null }));
+}
+function saveAvatarData() {
+  try {
+    const minimal = avatarData.map(p => ({ id: p.id, name: p.name, face: p.face }));
+    localStorage.setItem('pcs_avatars_v11', JSON.stringify(minimal));
+  } catch (e) {
+    console.warn('save failed', e);
+    alert('保存失敗（画像が大きすぎる可能性）');
+  }
+}
+
+// ========================================
+// 画面切替
+// ========================================
+const titleScreen = document.getElementById('titleScreen');
+const avatarScreen = document.getElementById('avatarScreen');
+
+// チームエンブレム：12個の三角形を放射状に配置
+(function buildEmblem() {
+  const g = document.getElementById('emblemTriangles');
+  if (!g) return;
+  const cx = 100, cy = 100;
+  const innerR = 52;
+  const outerR = 90;
+  const numTriangles = 12;
+  for (let i = 0; i < numTriangles; i++) {
+    const angle = (i / numTriangles) * Math.PI * 2 - Math.PI / 2;
+    // 三角形の3点
+    const baseHalfWidth = 14;
+    const tipAngle1 = angle - baseHalfWidth * Math.PI / 180 / 2;
+    const tipAngle2 = angle + baseHalfWidth * Math.PI / 180 / 2;
+    const tx = cx + Math.cos(angle) * outerR;
+    const ty = cy + Math.sin(angle) * outerR;
+    const b1x = cx + Math.cos(tipAngle1) * innerR;
+    const b1y = cy + Math.sin(tipAngle1) * innerR;
+    const b2x = cx + Math.cos(tipAngle2) * innerR;
+    const b2y = cy + Math.sin(tipAngle2) * innerR;
+    const tri = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    tri.setAttribute('points', `${tx},${ty} ${b1x},${b1y} ${b2x},${b2y}`);
+    tri.setAttribute('fill', 'none');
+    tri.setAttribute('stroke', '#fff');
+    tri.setAttribute('stroke-width', '3');
+    g.appendChild(tri);
+    // 三角形の中に小さな三角形（くり抜き風）
+    const sx = cx + Math.cos(angle) * (outerR - 8);
+    const sy = cy + Math.sin(angle) * (outerR - 8);
+    const sb1x = cx + Math.cos(tipAngle1) * (innerR + 6);
+    const sb1y = cy + Math.sin(tipAngle1) * (innerR + 6);
+    const sb2x = cx + Math.cos(tipAngle2) * (innerR + 6);
+    const sb2y = cy + Math.sin(tipAngle2) * (innerR + 6);
+    const innerTri = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    innerTri.setAttribute('points', `${sx},${sy} ${sb1x},${sb1y} ${sb2x},${sb2y}`);
+    innerTri.setAttribute('fill', 'none');
+    innerTri.setAttribute('stroke', '#fff');
+    innerTri.setAttribute('stroke-width', '1.5');
+    g.appendChild(innerTri);
+  }
+})();
+
+function showTitle() {
+  titleScreen.classList.remove('hide');
+  avatarScreen.classList.remove('show');
+}
+function hideTitle() {
+  titleScreen.classList.add('hide');
+  avatarScreen.classList.remove('show');
+}
+function showAvatarSettings() {
+  titleScreen.classList.add('hide');
+  avatarScreen.classList.add('show');
+  renderAvatarList();
+}
+
+document.getElementById('btnStart').onclick = () => {
+  hideTitle();
+  // 選手データに反映
+  refreshPlayerNamesAndFaces();
+};
+document.getElementById('btnAvatar').onclick = showAvatarSettings;
+document.getElementById('btnHelp').onclick = () => {
+  alert('【遊び方】\n\n📐 俯瞰モード\n・選手をタップ → 視点切替メニュー\n・選手/ボールをドラッグ → 位置変更\n\n👁 一人称モード\n・右下ジョイスティック → 電動車椅子操作\n  - 上=前進、下=後退\n  - 左=左旋回、右=右旋回\n  - 離すと自動停止\n・1-5ボタンで速度切替\n・左下スティック → 視点上下\n\n🗺️ 2Dマップモード\n・上から見て操作練習\n\n👤 選手設定\n・名前変更可能\n・顔写真をアップロード\n・3Dモデルの顔に表示されます');
+};
+document.getElementById('btnAvatarBack').onclick = () => {
+  saveAvatarData();
+  refreshPlayerNamesAndFaces();
+  showTitle();
+};
+document.getElementById('btnResetAvatars').onclick = () => {
+  if (confirm('全ての選手設定を初期化しますか？\n（顔写真も削除されます）')) {
+    avatarData = PLAYER_LIST.map(p => ({ ...p, name: p.defaultName, face: null }));
+    saveAvatarData();
+    renderAvatarList();
+    refreshPlayerNamesAndFaces();
+  }
+};
+document.getElementById('btnHome').onclick = () => {
+  if (mode === 'fps') setTopView();
+  else if (mode === 'map2d') exitMap2dView();
+  setTimeout(showTitle, mode === 'transition' ? 1300 : 0);
+};
+
+// ========================================
+// アバター設定リスト
+// ========================================
+const avatarList = document.getElementById('avatarList');
+const faceFileInput = document.getElementById('faceFileInput');
+let editingFaceForId = null;
+
+function renderAvatarList() {
+  avatarList.innerHTML = '';
+  const sections = [
+    { team: 'blue', title: '🟦 ブルーチーム' },
+    { team: 'red',  title: '🟥 レッドチーム' }
+  ];
+  for (const section of sections) {
+    const sect = document.createElement('div');
+    sect.className = 'teamSection';
+    const title = document.createElement('div');
+    title.className = 'teamTitle';
+    title.textContent = section.title;
+    sect.appendChild(title);
+    const teamPlayers = avatarData.filter(p => p.team === section.team);
+    for (const p of teamPlayers) {
+      sect.appendChild(createCharCard(p));
+    }
+    avatarList.appendChild(sect);
+  }
+}
+
+function createCharCard(p) {
+  const card = document.createElement('div');
+  card.className = 'charCard ' + p.team;
+  const avatar = document.createElement('div');
+  avatar.className = 'charAvatar';
+  if (p.face) {
+    const img = document.createElement('img');
+    img.src = p.face;
+    avatar.appendChild(img);
+  } else {
+    avatar.textContent = '📷';
+  }
+  avatar.onclick = () => {
+    editingFaceForId = p.id;
+    faceFileInput.click();
+  };
+  card.appendChild(avatar);
+  const info = document.createElement('div');
+  info.className = 'charInfo';
+  const num = document.createElement('div');
+  num.className = 'charNumber';
+  num.textContent = `背番号 #${p.number}`;
+  info.appendChild(num);
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'charNameInput';
+  nameInput.value = p.name;
+  nameInput.maxLength = 12;
+  nameInput.placeholder = '名前を入力';
+  nameInput.oninput = e => { p.name = e.target.value; };
+  nameInput.onblur = () => saveAvatarData();
+  info.appendChild(nameInput);
+  card.appendChild(info);
+  if (p.face) {
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'charRemoveBtn';
+    removeBtn.textContent = '写真削除';
+    removeBtn.onclick = () => {
+      p.face = null;
+      saveAvatarData();
+      renderAvatarList();
+    };
+    card.appendChild(removeBtn);
+  }
+  return card;
+}
+
+faceFileInput.onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file || !editingFaceForId) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      // 256x256にクロップ
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      const size = Math.min(img.width, img.height);
+      const sx = (img.width - size) / 2;
+      const sy = (img.height - size) / 2;
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, 256, 256);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const p = avatarData.find(pl => pl.id === editingFaceForId);
+      if (p) {
+        p.face = dataUrl;
+        saveAvatarData();
+        renderAvatarList();
+      }
+      editingFaceForId = null;
+      faceFileInput.value = '';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+// 選手データに反映（名前と顔写真）
+function refreshPlayerNamesAndFaces() {
+  if (typeof players === 'undefined' || !players) return;
+  for (const player of players) {
+    const data = avatarData.find(d => 
+      d.team === player.team && d.number === player.number
+    );
+    if (data) {
+      player.name = data.name;
+      // 顔テクスチャ更新
+      applyFaceTexture(player, data.face);
+    }
+  }
+}
+
+// 顔テクスチャを3Dモデルに貼る
+function applyFaceTexture(player, faceDataUrl) {
+  const mesh = player.mesh;
+  // 既存の顔テクスチャを削除
+  if (mesh.userData.faceMesh) {
+    mesh.remove(mesh.userData.faceMesh);
+    if (mesh.userData.faceMesh.material.map) {
+      mesh.userData.faceMesh.material.map.dispose();
+    }
+    mesh.userData.faceMesh.material.dispose();
+    mesh.userData.faceMesh.geometry.dispose();
+    mesh.userData.faceMesh = null;
+  }
+  if (!faceDataUrl) return;
+  const loader = new THREE.TextureLoader();
+  loader.load(faceDataUrl, (texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const faceMat = new THREE.MeshBasicMaterial({ map: texture });
+    const headRadius = 0.115;
+    const facePlane = new THREE.Mesh(
+      new THREE.CircleGeometry(headRadius * 1.1, 32),
+      faceMat
+    );
+    // 頭の前面（+Z側）に貼る
+    facePlane.position.set(0, 1.32, -CHAIR_L * 0.3 + headRadius * 0.95);
+    // 顔は前を向く（既存の頭部bodyPartsに追加）
+    if (mesh.userData.bodyParts) {
+      mesh.userData.bodyParts.add(facePlane);
+    } else {
+      mesh.add(facePlane);
+    }
+    mesh.userData.faceMesh = facePlane;
+  });
+}
+
+// 起動時はタイトル
+showTitle();
+
+const COURT_W = 15;
+const COURT_L = 28;
+const GOAL_W = 6;
+const BALL_D = 0.325;
+const CHAIR_W = 0.65;
+const CHAIR_L = 1.10;
+const HALL_W = 36;  // ベンチ・オフィシャルエリアを含む
+const HALL_L = 46;
+
+const stage = document.getElementById('stage');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2a);
+
+// FOV: 一人称時は広角95度で前方を広く見渡せる、俯瞰時は50度
+const FOV_TOP = 50;
+const FOV_FPS = 95;
+const camera = new THREE.PerspectiveCamera(FOV_TOP, 1, 0.05, 200);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+stage.appendChild(renderer.domElement);
+
+// 描画解像度はブラウザのアスペクト比を保ちつつ、最大解像度を制限してPC負荷軽減
+const MAX_RENDER_PIXELS = 1280 * 960; // 約122万ピクセルが上限
+function resize() {
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  if (w === 0 || h === 0) return;
+  // 内部解像度：表示サイズと同じアスペクト比、ピクセル数で制限
+  const currentPixels = w * h;
+  let scale = 1;
+  if (currentPixels > MAX_RENDER_PIXELS) {
+    scale = Math.sqrt(MAX_RENDER_PIXELS / currentPixels);
+  }
+  const renderW = Math.floor(w * scale);
+  const renderH = Math.floor(h * scale);
+  renderer.setSize(renderW, renderH, false);
+  renderer.setPixelRatio(1);
+  // CSS表示サイズはブラウザ全体
+  renderer.domElement.style.width = w + 'px';
+  renderer.domElement.style.height = h + 'px';
+  // カメラはブラウザの実際のアスペクト比に合わせる（重要！）
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  // 俯瞰モード中ならカメラの高さを調整
+  if (mode === 'top') {
+    const h2 = getTopCamHeight();
+    TOP_CAM_POS.y = h2;
+    camera.position.copy(TOP_CAM_POS);
+    camera.lookAt(TOP_CAM_LOOK);
+  }
+}
+window.addEventListener('resize', resize);
+
+// 照明
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const mainLight = new THREE.DirectionalLight(0xffffff, 0.55);
+mainLight.position.set(10, 22, 8);
+mainLight.castShadow = true;
+mainLight.shadow.mapSize.set(1024, 1024);
+mainLight.shadow.camera.left = -20;
+mainLight.shadow.camera.right = 20;
+mainLight.shadow.camera.top = 22;
+mainLight.shadow.camera.bottom = -22;
+mainLight.shadow.camera.near = 1;
+mainLight.shadow.camera.far = 60;
+scene.add(mainLight);
+
+// 天井ライト（梁は削除、ライトのみ）
+function addCeilingLight(x, z) {
+  const light = new THREE.PointLight(0xfff4e0, 0.35, 22);
+  light.position.set(x, 9, z);
+  scene.add(light);
+  const fixture = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 0.15, 0.8),
+    new THREE.MeshStandardMaterial({ color: 0xeeeeee, emissive: 0xfff4e0, emissiveIntensity: 0.6 })
+  );
+  fixture.position.set(x, 9.9, z);
+  scene.add(fixture);
+}
+for (let x = -8; x <= 8; x += 8) {
+  for (let z = -12; z <= 12; z += 6) {
+    addCeilingLight(x, z);
+  }
+}
+
+// 床（光沢のあるバスケコート床）
+const floorMat = new THREE.MeshPhysicalMaterial({
+  color: 0xd4a574,
+  roughness: 0.25,
+  metalness: 0.0,
+  clearcoat: 0.8,
+  clearcoatRoughness: 0.15,
+  reflectivity: 0.4
+});
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALL_W, HALL_L), floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// 木目の線
+for (let i = -HALL_W / 2; i <= HALL_W / 2; i += 0.5) {
+  const lineGeo = new THREE.PlaneGeometry(0.015, HALL_L);
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0x8a6f3f, transparent: true, opacity: 0.45 });
+  const line = new THREE.Mesh(lineGeo, lineMat);
+  line.rotation.x = -Math.PI / 2;
+  line.position.set(i, 0.001, 0);
+  scene.add(line);
+}
+for (let z = -HALL_L / 2; z <= HALL_L / 2; z += 2.5) {
+  const lineGeo = new THREE.PlaneGeometry(HALL_W, 0.012);
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0x6d5530, transparent: true, opacity: 0.3 });
+  const line = new THREE.Mesh(lineGeo, lineMat);
+  line.rotation.x = -Math.PI / 2;
+  line.position.set(0, 0.002, z);
+  scene.add(line);
+}
+
+// 壁
+const wallH = 11;
+const wallLowerH = 3;
+const lowerWallMat = new THREE.MeshStandardMaterial({ color: 0xa67c52, roughness: 0.7 });
+const upperWallMat = new THREE.MeshStandardMaterial({ color: 0xeae5d8, roughness: 0.95 });
+function addWall(w, x, z, rot) {
+  const lower = new THREE.Mesh(new THREE.PlaneGeometry(w, wallLowerH), lowerWallMat);
+  lower.position.set(x, wallLowerH / 2, z);
+  lower.rotation.y = rot;
+  scene.add(lower);
+  const upper = new THREE.Mesh(new THREE.PlaneGeometry(w, wallH - wallLowerH), upperWallMat);
+  upper.position.set(x, wallLowerH + (wallH - wallLowerH) / 2, z);
+  upper.rotation.y = rot;
+  scene.add(upper);
+}
+addWall(HALL_W, 0, -HALL_L / 2, 0);
+addWall(HALL_W, 0, HALL_L / 2, Math.PI);
+addWall(HALL_L, -HALL_W / 2, 0, Math.PI / 2);
+addWall(HALL_L, HALL_W / 2, 0, -Math.PI / 2);
+const ceil = new THREE.Mesh(
+  new THREE.PlaneGeometry(HALL_W, HALL_L),
+  new THREE.MeshStandardMaterial({ color: 0xc8c8d0, roughness: 0.95 })
+);
+ceil.position.y = wallH;
+ceil.rotation.x = Math.PI / 2;
+scene.add(ceil);
+
+// 窓
+function addWindow(x, y, z, w, h, rotY) {
+  const winMat = new THREE.MeshPhysicalMaterial({
+    color: 0xb8d4e8,
+    transparent: true,
+    opacity: 0.4,
+    roughness: 0.1,
+    transmission: 0.5,
+    emissive: 0xffffff,
+    emissiveIntensity: 0.15
+  });
+  const win = new THREE.Mesh(new THREE.PlaneGeometry(w, h), winMat);
+  win.position.set(x, y, z);
+  win.rotation.y = rotY;
+  scene.add(win);
+}
+for (let z = -10; z <= 10; z += 5) {
+  addWindow(-HALL_W / 2 + 0.01, 7.5, z, 2, 2.5, Math.PI / 2);
+  addWindow(HALL_W / 2 - 0.01, 7.5, z, 2, 2.5, -Math.PI / 2);
+}
+
+// バスケットゴール
+function addBasketRing(x, z, rotY) {
+  const g = new THREE.Group();
+  const board = new THREE.Mesh(
+    new THREE.BoxGeometry(1.8, 1.2, 0.05),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
+  );
+  board.position.set(0, 3, 0);
+  g.add(board);
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.23, 0.025, 8, 24),
+    new THREE.MeshStandardMaterial({ color: 0xff4500, metalness: 0.3 })
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.set(0, 2.7, 0.3);
+  g.add(ring);
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.06, 3, 8),
+    new THREE.MeshStandardMaterial({ color: 0x444444 })
+  );
+  pole.position.set(0, 1.5, -0.5);
+  g.add(pole);
+  g.position.set(x, 0, z);
+  g.rotation.y = rotY;
+  scene.add(g);
+}
+addBasketRing(0, -HALL_L / 2 + 1, 0);
+addBasketRing(0, HALL_L / 2 - 1, Math.PI);
+
+// =================================================
+// 試合運営オフィシャル・ベンチ・デジタイマー
+// =================================================
+
+// 人物（座っている）モデル作成
+// 立っている人物（審判用、コーチ用）
+function createStandingPerson(shirtColor, pantsColor = 0x222233) {
+  const g = new THREE.Group();
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xf2c89a, roughness: 0.7 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.6 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.7 });
+  // 両足（脚）
+  for (const dx of [-0.09, 0.09]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.85, 8), pantsMat);
+    leg.position.set(dx, 0.45, 0);
+    leg.castShadow = true;
+    g.add(leg);
+    // 靴
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.2),
+      new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 }));
+    shoe.position.set(dx, 0.025, 0.04);
+    g.add(shoe);
+  }
+  // 上半身
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.6, 0.28), shirtMat);
+  torso.position.set(0, 1.18, 0);
+  torso.castShadow = true;
+  g.add(torso);
+  // 首
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.1, 8), skinMat);
+  neck.position.set(0, 1.55, 0);
+  g.add(neck);
+  // 頭
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), skinMat);
+  head.position.set(0, 1.7, 0);
+  head.castShadow = true;
+  g.add(head);
+  // 髪
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.135, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.85 })
+  );
+  hair.position.set(0, 1.74, 0);
+  g.add(hair);
+  // 腕（両側に下げている）
+  for (const dx of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.6, 8), shirtMat);
+    arm.position.set(dx * 0.27, 1.15, 0);
+    g.add(arm);
+    // 手
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), skinMat);
+    hand.position.set(dx * 0.27, 0.82, 0);
+    g.add(hand);
+  }
+  return g;
+}
+
+function createPerson(shirtColor, isCoach = false) {
+  const g = new THREE.Group();
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xf2c89a, roughness: 0.7 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.6 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x222233, roughness: 0.7 });
+  
+  // 腰から下（座っている設定なので脚は折りたたみ）
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.4), pantsMat);
+  seat.position.set(0, 0.5, 0);
+  g.add(seat);
+  // 太もも（横に出ている）
+  const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, 0.45), pantsMat);
+  thigh.position.set(0, 0.45, 0.2);
+  g.add(thigh);
+  // すね（下に折り曲げ）
+  const shin = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.5, 0.18), pantsMat);
+  shin.position.set(0, 0.25, 0.4);
+  g.add(shin);
+  // 上半身
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.55, 0.28), shirtMat);
+  torso.position.set(0, 0.85, 0);
+  torso.castShadow = true;
+  g.add(torso);
+  // コーチの場合はジャケット風に襟を追加
+  if (isCoach) {
+    const collar = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.1, 0.29),
+      new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 }));
+    collar.position.set(0, 1.07, 0);
+    g.add(collar);
+  }
+  // 首
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.1, 8), skinMat);
+  neck.position.set(0, 1.15, 0);
+  g.add(neck);
+  // 頭
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), skinMat);
+  head.position.set(0, 1.27, 0);
+  head.castShadow = true;
+  g.add(head);
+  // 髪
+  const hairColors = [0x1a1a1a, 0x3a2410, 0x5a3a20, 0x808080];
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.125, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    new THREE.MeshStandardMaterial({ color: hairColors[Math.floor(Math.random() * hairColors.length)], roughness: 0.85 })
+  );
+  hair.position.set(0, 1.30, 0);
+  g.add(hair);
+  // 腕（前に出している）
+  const armMat = isCoach ? new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.6 }) : shirtMat;
+  const lArm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 8), armMat);
+  lArm.position.set(-0.22, 0.85, 0.15);
+  lArm.rotation.x = -Math.PI / 4;
+  g.add(lArm);
+  const rArm = lArm.clone();
+  rArm.position.x = 0.22;
+  g.add(rArm);
+  return g;
+}
+
+// 椅子モデル
+function createChair(color = 0x444444) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.3 });
+  // 座面
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.5), mat);
+  seat.position.set(0, 0.42, 0);
+  g.add(seat);
+  // 背もたれ
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.06), mat);
+  back.position.set(0, 0.7, -0.22);
+  g.add(back);
+  // 脚4本
+  for (const [dx, dz] of [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.42, 0.04), mat);
+    leg.position.set(dx, 0.21, dz);
+    g.add(leg);
+  }
+  return g;
+}
+
+// テーブルモデル
+function createTable(width, depth, color = 0x6b4423) {
+  const g = new THREE.Group();
+  const topMat = new THREE.MeshStandardMaterial({ color, roughness: 0.4 });
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.5 });
+  // 天板
+  const top = new THREE.Mesh(new THREE.BoxGeometry(width, 0.05, depth), topMat);
+  top.position.set(0, 0.72, 0);
+  top.castShadow = true;
+  g.add(top);
+  // 脚4本
+  for (const dx of [-width/2 + 0.1, width/2 - 0.1]) {
+    for (const dz of [-depth/2 + 0.1, depth/2 - 0.1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.7, 0.05), legMat);
+      leg.position.set(dx, 0.35, dz);
+      g.add(leg);
+    }
+  }
+  return g;
+}
+
+// デジタイマー（試合タイマー）
+function createDigiTimer() {
+  const g = new THREE.Group();
+  // 本体
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 0.7, 0.15),
+    new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.6 })
+  );
+  body.position.set(0, 0.95, 0);
+  g.add(body);
+  // 表示画面（黒い液晶）
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.2, 0.5),
+    new THREE.MeshBasicMaterial({ color: 0x000000 })
+  );
+  screen.position.set(0, 0.95, 0.077);
+  g.add(screen);
+  // 時間表示テキスト（Canvas）
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 224;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, 512, 224);
+  // 上部：時間（大きく赤）
+  ctx.fillStyle = '#ff3300';
+  ctx.font = 'bold 110px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('20:00', 256, 80);
+  // 下部：スコア（黄）
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 48px "Courier New", monospace';
+  ctx.fillText('H 0  -  0 A', 256, 175);
+  // ピリオド表示
+  ctx.fillStyle = '#00ff00';
+  ctx.font = 'bold 28px "Courier New", monospace';
+  ctx.fillText('1st', 60, 175);
+  const timerTex = new THREE.CanvasTexture(c);
+  const timerScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.2, 0.5),
+    new THREE.MeshBasicMaterial({ map: timerTex })
+  );
+  timerScreen.position.set(0, 0.95, 0.078);
+  g.add(timerScreen);
+  g.userData.timerCanvas = c;
+  g.userData.timerCtx = ctx;
+  g.userData.timerTex = timerTex;
+  // 支柱
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.04, 0.6, 8),
+    new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7 })
+  );
+  pole.position.set(0, 0.3, -0.05);
+  g.add(pole);
+  // ベース
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.25, 0.3, 0.08, 16),
+    new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.6 })
+  );
+  base.position.set(0, 0.04, 0);
+  g.add(base);
+  return g;
+}
+
+// =================================================
+// オフィシャルテーブル（センターラインから外側2m）
+// コートの+X側の外（観客側）に配置
+// =================================================
+const OFFICIAL_X = COURT_W / 2 + 2;  // コート外2m
+// オフィシャルテーブル（記録係のテーブル）
+const officialTable = createTable(2.5, 0.8, 0x4a3520);
+officialTable.position.set(OFFICIAL_X, 0, 0);
+officialTable.rotation.y = -Math.PI / 2;  // コート方向を向く
+scene.add(officialTable);
+
+// デジタイマー（自立スタンド式、コート横に設置、コートに向けて表示）
+const digiTimer = createDigiTimer();
+digiTimer.position.set(OFFICIAL_X + 0.5, 0, -2.5);  // テーブルの隣に自立
+digiTimer.rotation.y = -Math.PI / 2;
+scene.add(digiTimer);
+
+// 記録係2人（テーブルの外側に座っている）
+const scorer1 = createPerson(0xffffff, false);  // 白シャツ
+scorer1.position.set(OFFICIAL_X + 0.7, 0, -0.5);
+scorer1.rotation.y = -Math.PI / 2;  // コート方向を見る
+scene.add(scorer1);
+const scorer2 = createPerson(0xffffff, false);
+scorer2.position.set(OFFICIAL_X + 0.7, 0, 0.5);
+scorer2.rotation.y = -Math.PI / 2;
+scene.add(scorer2);
+
+// 記録係の椅子
+const scorerChair1 = createChair(0x333333);
+scorerChair1.position.set(OFFICIAL_X + 0.7, 0, -0.5);
+scorerChair1.rotation.y = -Math.PI / 2;
+scene.add(scorerChair1);
+const scorerChair2 = createChair(0x333333);
+scorerChair2.position.set(OFFICIAL_X + 0.7, 0, 0.5);
+scorerChair2.rotation.y = -Math.PI / 2;
+scene.add(scorerChair2);
+
+// 記録用紙（テーブル上の白い紙）
+const paper = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.4, 0.3),
+  new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 })
+);
+paper.rotation.x = -Math.PI / 2;
+paper.position.set(OFFICIAL_X + 0.7, 0.755, -0.2);
+scene.add(paper);
+
+// テクニカルエリアのライン表示（白いダッシュライン）
+function makeTechnicalAreaLine(x1, z1, x2, z2, color = 0xffffff) {
+  const totalLen = Math.hypot(x2 - x1, z2 - z1);
+  const dashLen = 0.3;
+  const gapLen = 0.2;
+  const numDashes = Math.floor(totalLen / (dashLen + gapLen));
+  const dx = (x2 - x1) / totalLen;
+  const dz = (z2 - z1) / totalLen;
+  for (let i = 0; i < numDashes; i++) {
+    const t = i * (dashLen + gapLen);
+    const sx = x1 + dx * t;
+    const sz = z1 + dz * t;
+    const ex = x1 + dx * (t + dashLen);
+    const ez = z1 + dz * (t + dashLen);
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(dashLen, 0.04),
+      new THREE.MeshBasicMaterial({ color })
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.position.set((sx + ex) / 2, 0.005, (sz + ez) / 2);
+    m.rotation.z = Math.atan2(ez - sz, ex - sx);
+    scene.add(m);
+  }
+}
+
+// =================================================
+// ベンチ（テクニカルエリア）
+// オフィシャルテーブルの+Z側と-Z側に各チーム配置
+// 青チームベンチ：+Z側、赤チームベンチ：-Z側
+// =================================================
+const BENCH_X = COURT_W / 2 + 2;  // コートから2m外
+const BENCH_DEPTH = 1.0;  // ベンチの奥行き
+const BENCH_OFFSET = 4;   // オフィシャルテーブルから±4m
+
+// ベンチを作る関数
+function createBench(teamColor, centerZ, isReversed) {
+  // 長いベンチ
+  const benchMat = new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.6 });
+  const bench = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 4.5), benchMat);
+  bench.position.set(BENCH_X + 0.4, 0.42, centerZ);
+  bench.castShadow = true;
+  scene.add(bench);
+  // ベンチの足
+  for (const dz of [-2, 0, 2]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.42, 0.4),
+      new THREE.MeshStandardMaterial({ color: 0x333333 }));
+    leg.position.set(BENCH_X + 0.4, 0.21, centerZ + dz);
+    scene.add(leg);
+  }
+  // メンバー構成：コーチ1人 + 補欠2人（人間、ベンチ着席）+ 補欠車椅子2人（ベンチ前）
+  // 1. コーチ（一番端、ベンチに座る）
+  const coach = createPerson(0x222222, true);
+  coach.position.set(BENCH_X + 0.4, 0, centerZ - 1.8);
+  coach.rotation.y = -Math.PI / 2;
+  scene.add(coach);
+  // 2. 補欠人間2人（ベンチに座る）
+  const sub1 = createPerson(teamColor, false);
+  sub1.position.set(BENCH_X + 0.4, 0, centerZ - 0.6);
+  sub1.rotation.y = -Math.PI / 2;
+  scene.add(sub1);
+  const sub2 = createPerson(teamColor, false);
+  sub2.position.set(BENCH_X + 0.4, 0, centerZ + 0.6);
+  sub2.rotation.y = -Math.PI / 2;
+  scene.add(sub2);
+  // 3. 補欠車椅子2人（ベンチの前、コート寄りに配置）
+  // 既存の createPowerchair を使用
+  const subChair1 = createPowerchair(teamColor, 'S1');
+  // ベンチの少し前（コート寄り）、コート方向を向く
+  subChair1.position.set(BENCH_X - 0.5, 0, centerZ + 1.5);
+  subChair1.rotation.y = -Math.PI / 2;  // コート方向(-X)を向く
+  scene.add(subChair1);
+  const subChair2 = createPowerchair(teamColor, 'S2');
+  subChair2.position.set(BENCH_X - 0.5, 0, centerZ + 2.5);
+  subChair2.rotation.y = -Math.PI / 2;
+  scene.add(subChair2);
+}
+
+// 青チームベンチ（+Z側、コートの北側＝青が攻める方向 だが、ベンチは選手と反対側）
+// 青チームは z>0 にいて北攻める → ベンチは -Z 側に置く（自陣側）
+createBench(0x2d8a3d, -BENCH_OFFSET - 2, false);  // 青ベンチ
+
+// 赤チームベンチ（+Z側、自陣側）
+createBench(0xc43850, BENCH_OFFSET + 2, true);   // 赤ベンチ
+
+// テクニカルエリアラインを描画
+// オフィシャルエリア：センターから±1m
+makeTechnicalAreaLine(BENCH_X - 0.1, -1, BENCH_X - 0.1, 1, 0xffd700);  // オフィシャルエリア境界
+// テクニカルエリア（青）：z=-2 から z=-COURT_L/2方向
+makeTechnicalAreaLine(BENCH_X - 0.1, -1.5, BENCH_X - 0.1, -COURT_L / 2, 0x2d8a3d);
+// テクニカルエリア（赤）
+makeTechnicalAreaLine(BENCH_X - 0.1, 1.5, BENCH_X - 0.1, COURT_L / 2, 0xe94560);
+
+// 主審（コート中心、立っている）- 黄色シャツ、黒パンツ
+const referee = createStandingPerson(0xffff00, 0x000000);
+referee.position.set(2.5, 0, 0);  // コート中央やや右
+referee.rotation.y = Math.PI;  // 北を向く（青ゴール側）
+scene.add(referee);
+
+// アシスタント審判2人（センターラインの延長線上、コート外側に立ち、内側を向く）
+// コートの両端外、センターライン延長上 = z=0、コート外側
+// 左側（-X側）= 主観客席側、右側（+X側）= オフィシャル側だがすでにオフィシャルテーブルがある
+// → 左側（-X側）にAR1、右側（+X側）にAR2を配置するが、+X側はオフィシャル
+// FIPFAでは「アシスタント審判はタッチラインに沿って」なので、両タッチラインの中央付近
+// ただしオフィシャル側は記録テーブルがあるので、AR1は-X側のみとし、
+// AR2はコート両端外（ゴールライン延長外）に配置するのが現実的
+
+// 線審が持つ旗（赤と黄の縞模様）
+function createReferreeFlag() {
+  const g = new THREE.Group();
+  // 旗のポール（白いスティック）
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.012, 0.012, 0.5, 8),
+    new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.5 })
+  );
+  pole.position.set(0, 0, 0);
+  g.add(pole);
+  // 旗の布（赤と黄の縞模様、Canvas）
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 64;
+  const cctx = c.getContext('2d');
+  // 対角縞模様（赤と黄）
+  cctx.fillStyle = '#ff3300';
+  cctx.fillRect(0, 0, 64, 64);
+  cctx.fillStyle = '#ffd700';
+  // 斜めの黄色帯を3本
+  cctx.save();
+  cctx.translate(32, 32);
+  cctx.rotate(Math.PI / 4);
+  for (let i = -50; i < 50; i += 18) {
+    cctx.fillRect(i, -50, 9, 100);
+  }
+  cctx.restore();
+  const flagTex = new THREE.CanvasTexture(c);
+  const flagMat = new THREE.MeshStandardMaterial({ 
+    map: flagTex, side: THREE.DoubleSide, roughness: 0.7 
+  });
+  // 旗本体（ポールの上端から横に伸びる）
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.25), flagMat);
+  flag.position.set(0.18, 0.13, 0);  // ポール上部から横に
+  g.add(flag);
+  return g;
+}
+
+// AR1: 左タッチライン（-X側）外、センター位置、コート内側を向く
+const assistRef1 = createStandingPerson(0xffff00, 0x000000);
+assistRef1.position.set(-COURT_W / 2 - 1.5, 0, 0);
+assistRef1.rotation.y = Math.PI / 2;  // +X方向（コート内側）を向く
+// 旗を右手に持たせる（手の位置: y=0.82付近）
+const flag1 = createReferreeFlag();
+flag1.position.set(0.32, 1.0, 0);  // 右手の上、肩から少し前
+flag1.rotation.z = -Math.PI / 3;   // 斜め上に持ち上げ
+assistRef1.add(flag1);
+scene.add(assistRef1);
+
+// AR2: ハーフウェーライン外、+X側だが少し外側、コート内側を向く
+const assistRef2 = createStandingPerson(0xffff00, 0x000000);
+assistRef2.position.set(COURT_W / 2 + 4.5, 0, 0);
+assistRef2.rotation.y = -Math.PI / 2;
+const flag2 = createReferreeFlag();
+flag2.position.set(0.32, 1.0, 0);
+flag2.rotation.z = -Math.PI / 3;
+assistRef2.add(flag2);
+scene.add(assistRef2);
+
+// =================================================
+// 試合タイマー更新
+// =================================================
+let matchTimeRemaining = 20 * 60;  // 20分（秒）
+let matchPeriod = 1;  // 1=前半, 2=後半
+let matchRunning = false;  // 今は停止状態
+let scoreBlue = 0;
+let scoreRed = 0;
+
+function updateDigiTimer() {
+  const ctx = digiTimer.userData.timerCtx;
+  const c = digiTimer.userData.timerCanvas;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, c.width, c.height);
+  // 時間
+  const mins = Math.floor(matchTimeRemaining / 60);
+  const secs = Math.floor(matchTimeRemaining % 60);
+  const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  ctx.fillStyle = matchTimeRemaining < 60 ? '#ff0000' : '#ff6600';
+  ctx.font = 'bold 110px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(timeStr, 256, 80);
+  // スコア
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 48px "Courier New", monospace';
+  ctx.fillText(`H ${scoreBlue}  -  ${scoreRed} A`, 256, 175);
+  // ピリオド
+  ctx.fillStyle = '#00ff00';
+  ctx.font = 'bold 28px "Courier New", monospace';
+  ctx.fillText(matchPeriod === 1 ? '1st' : '2nd', 60, 175);
+  digiTimer.userData.timerTex.needsUpdate = true;
+}
+updateDigiTimer();
+
+
+// コートライン
+const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+function makeLine(x1, z1, x2, z2, width = 0.05) {
+  const len = Math.hypot(x2 - x1, z2 - z1);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(len, width), lineMat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set((x1 + x2) / 2, 0.01, (z1 + z2) / 2);
+  m.rotation.z = Math.atan2(z2 - z1, x2 - x1);
+  scene.add(m);
+}
+const hw = COURT_W / 2;
+const hl = COURT_L / 2;
+makeLine(-hw, -hl, hw, -hl);
+makeLine(-hw, hl, hw, hl);
+makeLine(-hw, -hl, -hw, hl);
+makeLine(hw, -hl, hw, hl);
+makeLine(-hw, 0, hw, 0);
+const circle = new THREE.Mesh(new THREE.RingGeometry(1.45, 1.5, 64), lineMat);
+circle.rotation.x = -Math.PI / 2;
+circle.position.y = 0.011;
+scene.add(circle);
+const gw = 4;
+const gd = 5;
+makeLine(-gw, -hl, gw, -hl);
+makeLine(-gw, -hl, -gw, -hl + gd);
+makeLine(gw, -hl, gw, -hl + gd);
+makeLine(-gw, -hl + gd, gw, -hl + gd);
+makeLine(-gw, hl, gw, hl);
+makeLine(-gw, hl, -gw, hl - gd);
+makeLine(gw, hl, gw, hl - gd);
+makeLine(-gw, hl - gd, gw, hl - gd);
+
+// コーナートライアングル（コート4隅から1m内側に三角線）
+// FIPFA: A triangle 1m from each corner is marked inside the field of play
+const ct = 1.0;  // 1m
+// 左下コーナー (-hw, -hl)
+makeLine(-hw + ct, -hl, -hw, -hl + ct);
+// 右下コーナー (hw, -hl)
+makeLine(hw - ct, -hl, hw, -hl + ct);
+// 左上コーナー (-hw, hl)
+makeLine(-hw + ct, hl, -hw, hl - ct);
+// 右上コーナー (hw, hl)
+makeLine(hw - ct, hl, hw, hl - ct);
+
+// ペナルティマーク（ゴールラインから3.5m、各ゴール）
+function makePenaltyMark(zPos) {
+  const markMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  // X字（中央に印）
+  const m1 = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.04), markMat);
+  m1.rotation.x = -Math.PI / 2;
+  m1.position.set(0, 0.012, zPos);
+  m1.rotation.z = Math.PI / 4;
+  scene.add(m1);
+  const m2 = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.04), markMat);
+  m2.rotation.x = -Math.PI / 2;
+  m2.position.set(0, 0.012, zPos);
+  m2.rotation.z = -Math.PI / 4;
+  scene.add(m2);
+}
+makePenaltyMark(-hl + 3.5);  // 北側ゴール
+makePenaltyMark(hl - 3.5);   // 南側ゴール
+
+// センターマーク（X字）
+const cMarkMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const cm1 = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.04), cMarkMat);
+cm1.rotation.x = -Math.PI / 2;
+cm1.position.set(0, 0.013, 0);
+cm1.rotation.z = Math.PI / 4;
+scene.add(cm1);
+const cm2 = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.04), cMarkMat);
+cm2.rotation.x = -Math.PI / 2;
+cm2.position.set(0, 0.013, 0);
+cm2.rotation.z = -Math.PI / 4;
+scene.add(cm2);
+
+// ゴール
+function makeGoal(zPos, color) {
+  const group = new THREE.Group();
+  const goalH = 1.5;
+  const postR = 0.06;
+  const postMat = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.3 });
+  const lP = new THREE.Mesh(new THREE.CylinderGeometry(postR, postR, goalH, 12), postMat);
+  lP.position.set(-GOAL_W / 2, goalH / 2, 0);
+  lP.castShadow = true;
+  group.add(lP);
+  const rP = lP.clone();
+  rP.position.x = GOAL_W / 2;
+  group.add(rP);
+  const base = new THREE.Mesh(
+    new THREE.PlaneGeometry(GOAL_W, 0.3),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5 })
+  );
+  base.rotation.x = -Math.PI / 2;
+  base.position.set(0, 0.015, zPos > 0 ? -0.15 : 0.15);
+  group.add(base);
+  group.position.z = zPos;
+  scene.add(group);
+}
+makeGoal(-hl, 0xffd700);
+makeGoal(hl, 0x2d8a3d);
+
+// 電動車椅子
+function createPowerchair(color, number) {
+  const g = new THREE.Group();
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.5 });
+  const baseFrame = new THREE.Mesh(new THREE.BoxGeometry(CHAIR_W * 0.85, 0.18, CHAIR_L * 0.65), frameMat);
+  baseFrame.position.set(0, 0.22, -0.1);
+  baseFrame.castShadow = true;
+  g.add(baseFrame);
+  const battery = new THREE.Mesh(
+    new THREE.BoxGeometry(CHAIR_W * 0.7, 0.14, 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 })
+  );
+  battery.position.set(0, 0.12, -CHAIR_L * 0.3);
+  battery.castShadow = true;
+  g.add(battery);
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.85 });
+  const hubMat = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.7, roughness: 0.3 });
+  function makeWheel(radius, width, isRear) {
+    const wg = new THREE.Group();
+    // タイヤ本体（円筒、横向き）
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, width, 20), tireMat);
+    tire.rotation.z = Math.PI / 2;
+    tire.castShadow = true;
+    wg.add(tire);
+    // ハブ（中央の金属部）
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.35, radius * 0.35, width * 1.05, 12), hubMat);
+    hub.rotation.z = Math.PI / 2;
+    wg.add(hub);
+    // スポーク（後輪のみ、半径の80%まで＝タイヤ内に収まる）
+    if (isRear) {
+      const spokeLen = radius * 0.75;  // タイヤ半径の75%
+      for (let i = 0; i < 5; i++) {
+        const spoke = new THREE.Mesh(
+          new THREE.BoxGeometry(0.015, spokeLen * 2, 0.015),
+          hubMat
+        );
+        spoke.rotation.z = (i / 5) * Math.PI;
+        wg.add(spoke);
+      }
+    }
+    return wg;
+  }
+  // 駆動輪（後輪）：実機 Strike Force は約直径30cm、半径15cm
+  // タイヤ位置 y = radius（地面に接地）
+  const REAR_R = 0.16;
+  const lRear = makeWheel(REAR_R, 0.10, true);
+  // 後輪（駆動輪）：車体中央からわずか後方
+  lRear.position.set(-CHAIR_W / 2 - 0.03, REAR_R, -0.15);
+  g.add(lRear);
+  const rRear = makeWheel(REAR_R, 0.10, true);
+  rRear.position.set(CHAIR_W / 2 + 0.03, REAR_R, -0.15);
+  g.add(rRear);
+  // 前輪（キャスター）：小さめ、半径8cm
+  const FRONT_R = 0.08;
+  const lFront = makeWheel(FRONT_R, 0.06, false);
+  lFront.position.set(-CHAIR_W / 2 - 0.02, FRONT_R, 0.18);
+  g.add(lFront);
+  const rFront = makeWheel(FRONT_R, 0.06, false);
+  rFront.position.set(CHAIR_W / 2 + 0.02, FRONT_R, 0.18);
+  g.add(rFront);
+  const bumperMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.85, roughness: 0.3 });
+  const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(CHAIR_W + 0.25, 0.18, 0.08), bumperMat);
+  frontBumper.position.set(0, 0.12, CHAIR_L * 0.45);
+  frontBumper.castShadow = true;
+  g.add(frontBumper);
+  for (const sx of [-CHAIR_W / 2, CHAIR_W / 2]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.35), bumperMat);
+    post.position.set(sx, 0.18, CHAIR_L * 0.3);
+    g.add(post);
+  }
+  for (const sx of [-1, 1]) {
+    const side = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.2), bumperMat);
+    side.position.set(sx * (CHAIR_W / 2 + 0.12), 0.12, CHAIR_L * 0.35);
+    g.add(side);
+  }
+  const seatMat = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
+  const seatBack = new THREE.Mesh(new THREE.BoxGeometry(CHAIR_W * 0.75, 0.7, 0.12), seatMat);
+  seatBack.position.set(0, 0.85, -CHAIR_L * 0.35);
+  seatBack.castShadow = true;
+  g.add(seatBack);
+  const headrest = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.15, 0.1), seatMat);
+  headrest.position.set(0, 1.22, -CHAIR_L * 0.35);
+  g.add(headrest);
+  const seat = new THREE.Mesh(
+    new THREE.BoxGeometry(CHAIR_W * 0.75, 0.1, 0.42),
+    new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.6 })
+  );
+  seat.position.set(0, 0.55, -0.12);
+  g.add(seat);
+  for (const sx of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.35), bumperMat);
+    arm.position.set(sx * (CHAIR_W * 0.4), 0.75, -0.1);
+    g.add(arm);
+  }
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xf2c89a, roughness: 0.7 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
+  const sidePanelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6 });
+  // 体パーツは一人称時に非表示にするため別グループに
+  const bodyParts = new THREE.Group();
+  // 胴体（緑メイン）
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.45, 0.22), shirtMat);
+  torso.position.set(0, 0.95, -CHAIR_L * 0.3);
+  torso.castShadow = true;
+  bodyParts.add(torso);
+  // ユニフォームの黒サイドパネル（左右に縦の黒い帯）
+  for (const sx of [-1, 1]) {
+    const sidePanel = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.45, 0.225), sidePanelMat);
+    sidePanel.position.set(sx * 0.155, 0.95, -CHAIR_L * 0.3);
+    bodyParts.add(sidePanel);
+  }
+  // 襟（黒）
+  const collar = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.23), sidePanelMat);
+  collar.position.set(0, 1.17, -CHAIR_L * 0.3);
+  bodyParts.add(collar);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.08, 8), skinMat);
+  neck.position.set(0, 1.22, -CHAIR_L * 0.3);
+  bodyParts.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 20, 16), skinMat);
+  head.position.set(0, 1.32, -CHAIR_L * 0.3);
+  head.castShadow = true;
+  bodyParts.add(head);
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.85 })
+  );
+  hair.position.set(0, 1.36, -CHAIR_L * 0.3);
+  bodyParts.add(hair);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+  const lEye = new THREE.Mesh(new THREE.SphereGeometry(0.012), eyeMat);
+  lEye.position.set(-0.035, 1.34, -CHAIR_L * 0.3 + 0.10);
+  bodyParts.add(lEye);
+  const rEye = lEye.clone();
+  rEye.position.x = 0.035;
+  bodyParts.add(rEye);
+  const armGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.32, 8);
+  const lArm = new THREE.Mesh(armGeo, shirtMat);
+  lArm.position.set(-0.2, 0.85, -CHAIR_L * 0.18);
+  lArm.rotation.x = -Math.PI / 4;
+  bodyParts.add(lArm);
+  const rArm = lArm.clone();
+  rArm.position.x = 0.2;
+  bodyParts.add(rArm);
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x223366, roughness: 0.6 });
+  const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.4, 8);
+  const lLeg = new THREE.Mesh(legGeo, legMat);
+  lLeg.position.set(-0.1, 0.5, 0.05);
+  lLeg.rotation.x = -Math.PI / 2.3;
+  bodyParts.add(lLeg);
+  const rLeg = lLeg.clone();
+  rLeg.position.x = 0.1;
+  bodyParts.add(rLeg);
+  const shinGeo = new THREE.CylinderGeometry(0.055, 0.055, 0.4, 8);
+  const lShin = new THREE.Mesh(shinGeo, legMat);
+  lShin.position.set(-0.1, 0.32, 0.4);
+  lShin.rotation.x = -Math.PI * 0.55;
+  bodyParts.add(lShin);
+  const rShin = lShin.clone();
+  rShin.position.x = 0.1;
+  bodyParts.add(rShin);
+  const shoeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 });
+  const lShoe = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.2), shoeMat);
+  lShoe.position.set(-0.1, 0.1, 0.45);
+  bodyParts.add(lShoe);
+  const rShoe = lShoe.clone();
+  rShoe.position.x = 0.1;
+  bodyParts.add(rShoe);
+  g.add(bodyParts);
+  g.userData.bodyParts = bodyParts;
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const ctx2 = c.getContext('2d');
+  ctx2.fillStyle = '#fff';
+  ctx2.font = 'bold 80px sans-serif';
+  ctx2.textAlign = 'center';
+  ctx2.textBaseline = 'middle';
+  ctx2.fillText(number, 64, 64);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
+  sprite.position.set(0, 1.0, -CHAIR_L * 0.4);
+  sprite.scale.set(0.28, 0.28, 1);
+  g.add(sprite);
+  const eye = new THREE.Object3D();
+  eye.position.set(0, 1.45, -CHAIR_L * 0.35);  // やや高め・後方寄り、車椅子全体が見える
+  g.add(eye);
+  g.userData.eyePos = eye;
+  g.userData.number = number;
+  g.userData.color = color;
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.42, 0.52, 32),
+    new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 1.6;
+  g.add(ring);
+  g.userData.ring = ring;
+  return g;
+}
+
+function createBall() {
+  const r = BALL_D / 2;
+  const ball = new THREE.Mesh(
+    new THREE.SphereGeometry(r, 32, 24),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
+  );
+  ball.castShadow = true;
+  const blackMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const positions = [
+    [0, 1, 0], [0, -1, 0],
+    [1, 0.3, 0], [-1, 0.3, 0],
+    [0.5, 0.3, 0.8], [-0.5, 0.3, 0.8],
+    [0.5, 0.3, -0.8], [-0.5, 0.3, -0.8],
+    [0.7, -0.5, 0.5], [-0.7, -0.5, 0.5],
+    [0.7, -0.5, -0.5], [-0.7, -0.5, -0.5]
+  ];
+  positions.forEach(p => {
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(r * 0.15, 5), blackMat);
+    const dir = new THREE.Vector3(p[0], p[1], p[2]).normalize();
+    dot.position.copy(dir).multiplyScalar(r * 1.001);
+    dot.lookAt(dot.position.clone().multiplyScalar(2));
+    ball.add(dot);
+  });
+  return ball;
+}
+
+const players = [];
+function addPlayer(x, z, angle, team, number, name) {
+  // GK（背番号1）はチーム色と区別するためオレンジ系
+  const isGK = (number === '1');
+  let color;
+  if (isGK) {
+    color = team === 'blue' ? 0xff8800 : 0xffaa00;  // 青GK=濃いオレンジ、赤GK=明るいオレンジ
+  } else {
+    color = team === 'blue' ? 0x2d8a3d : 0xc43850;  // 通常は緑/赤
+  }
+  const chair = createPowerchair(color, number);
+  chair.position.set(x, 0, z);
+  chair.rotation.y = angle;
+  scene.add(chair);
+  players.push({ mesh: chair, team, number, name, homeX: x, homeZ: z, homeAngle: angle, isGK });
+}
+addPlayer(-4, 9, Math.PI, 'blue', '6', '中村(K)');
+addPlayer(4, 9, Math.PI, 'blue', '7', 'デル-7');
+addPlayer(-2, 5, Math.PI, 'blue', '10', 'デル-10');
+addPlayer(0, 12, Math.PI, 'blue', '1', 'デルGK');
+addPlayer(-4, -9, 0, 'red', '9', '赤-9');
+addPlayer(4, -9, 0, 'red', '11', '赤-11');
+addPlayer(2, -5, 0, 'red', '6', '赤-6');
+addPlayer(0, -12, 0, 'red', '1', '赤GK');
+
+const ball = createBall();
+ball.position.set(0, BALL_D / 2, 0);
+ball.userData.vx = 0;
+ball.userData.vz = 0;
+scene.add(ball);
+
+// =================================
+// モード管理
+// =================================
+let mode = 'top';
+let fpsPlayer = null;
+let fpsYaw = 0;
+let fpsPitch = 0;
+let playerWorldX = 0;
+let playerWorldZ = 0;
+// 差動駆動の物理状態
+let leftWheelVel = 0;   // 左輪周速 m/s
+let rightWheelVel = 0;  // 右輪周速 m/s
+let chairVelocity = 0;  // 並進速度 m/s
+let chairAngularVel = 0;  // 角速度 rad/s
+// 速度ダイヤル（1〜5）
+let speedLevel = 2;
+// 各レベルの最大速度（m/s）競技用最大6km/h=1.67m/s, 国際10km/h=2.78m/s
+const SPEED_LEVELS_MPS = [0, 0.5, 1.0, 1.5, 2.2, 2.8];
+// 車輪間距離（後輪左右の中心距離）
+const WHEEL_BASE = CHAIR_W;
+
+// 俯瞰時の高さはアスペクト比に応じて調整（縦長画面ならもっと近く、横長なら遠く）
+function getTopCamHeight() {
+  const aspect = camera.aspect;
+  // 必要な視野角を満たすカメラ距離
+  // コート縦28mを画面縦に収めるには H ≧ 28 / (2 * tan(FOV/2))
+  // 横15mを画面横に収めるには W ≧ (15/aspect) / (2 * tan(FOV/2))
+  const fovRad = FOV_TOP * Math.PI / 180;
+  const distForHeight = 28 / (2 * Math.tan(fovRad / 2)) + 2;
+  const distForWidth = (15 / aspect) / (2 * Math.tan(fovRad / 2)) + 2;
+  return Math.max(distForHeight, distForWidth);
+}
+const TOP_CAM_POS = new THREE.Vector3(0, 30, 0.001);
+const TOP_CAM_LOOK = new THREE.Vector3(0, 0, 0);
+
+// カメラ遷移アニメ用
+let transitionStart = null;
+let transitionDuration = 1200; // 1.2秒
+let transitionFromPos = new THREE.Vector3();
+let transitionFromLook = new THREE.Vector3();
+let transitionTargetType = 'top';  // 'top' or 'fps'
+
+function isPC() {
+  return !('ontouchstart' in window) || navigator.maxTouchPoints === 0;
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function startTransitionTo(target) {
+  mode = 'transition';
+  document.getElementById('modeLabel').textContent = '🎥 視点切替中...';
+  document.getElementById('modeLabel').classList.remove('fps');
+  document.getElementById('modeLabel').classList.add('transition');
+  // UIを一旦隠す
+  document.getElementById('topHint').style.display = 'none';
+  document.getElementById('topActions').style.display = 'none';
+  document.getElementById('wcController').classList.remove('show');
+  document.getElementById('lookStick').classList.remove('show');
+  document.getElementById('lookLabel').classList.remove('show');
+  document.getElementById('pcHint').classList.remove('show');
+  document.getElementById('fpsBackBtn').style.display = 'none';
+  document.getElementById('fpsInfo').style.display = 'none';
+  document.getElementById('playerSelectModal').classList.remove('show');
+  transitionFromPos.copy(camera.position);
+  const lookDir = new THREE.Vector3();
+  camera.getWorldDirection(lookDir);
+  transitionFromLook.copy(camera.position).add(lookDir.multiplyScalar(5));
+  // FOVの遷移
+  transitionFromFOV = camera.fov;
+  transitionToFOV = (target === 'fps') ? FOV_FPS : FOV_TOP;
+  transitionStart = performance.now();
+  transitionTargetType = target;
+}
+
+function finishTransition() {
+  if (transitionTargetType === 'fps') {
+    mode = 'fps';
+    document.getElementById('modeLabel').textContent = `👁 #${fpsPlayer.number} ${fpsPlayer.name}`;
+    document.getElementById('modeLabel').classList.add('fps');
+    document.getElementById('modeLabel').classList.remove('transition');
+    document.getElementById('fpsBackBtn').style.display = 'block';
+    document.getElementById('fpsInfo').style.display = 'block';
+    document.getElementById('fpsInfo').textContent = `${fpsPlayer.name} #${fpsPlayer.number}`;
+    if (isPC()) {
+      document.getElementById('pcHint').classList.add('show');
+    }
+    // 電動車椅子コントローラーと視点スティックを表示
+    document.getElementById('wcController').classList.add('show');
+    document.getElementById('lookStick').classList.add('show');
+    document.getElementById('lookLabel').classList.add('show');
+    renderer.domElement.style.cursor = 'grab';
+  } else {
+    mode = 'top';
+    document.getElementById('modeLabel').textContent = '📐 俯瞰モード';
+    document.getElementById('modeLabel').classList.remove('fps');
+    document.getElementById('modeLabel').classList.remove('transition');
+    document.getElementById('topHint').style.display = 'block';
+    document.getElementById('topActions').style.display = 'flex';
+    players.forEach(p => p.mesh.userData.ring.visible = true);
+    players.forEach(p => p.mesh.visible = true);
+    // 全選手の体パーツを再表示
+    players.forEach(p => {
+      if (p.mesh.userData.bodyParts) p.mesh.userData.bodyParts.visible = true;
+    });
+    fpsPlayer = null;
+    renderer.domElement.style.cursor = 'default';
+  }
+}
+
+function setTopView() {
+  // 戻る時のカメラ高さも調整
+  TOP_CAM_POS.y = getTopCamHeight();
+  startTransitionTo('top');
+}
+
+function showPlayerModal(player) {
+  // 選手情報をモーダルにセット
+  const avatar = document.getElementById('modalAvatar');
+  avatar.innerHTML = '';
+  avatar.classList.remove('red');
+  if (player.team === 'red') avatar.classList.add('red');
+  avatar.textContent = player.number;
+  document.getElementById('modalTeam').textContent = 
+    (player.team === 'red' ? '🟥 レッドチーム' : '🟦 ブルーチーム');
+  document.getElementById('modalName').textContent = player.name;
+  document.getElementById('modalNumber').textContent = `背番号 #${player.number}`;
+  document.getElementById('playerSelectModal').classList.add('show');
+}
+
+function setFPSView(player) {
+  fpsPlayer = player;
+  fpsYaw = player.mesh.rotation.y;
+  fpsPitch = -0.25;  // 少し下向き：自分の車椅子の先端が見える
+  // 現在のmesh位置（幾何中心）から後輪中心の位置を逆算
+  const forwardX = Math.sin(fpsYaw);
+  const forwardZ = Math.cos(fpsYaw);
+  playerWorldX = player.mesh.position.x - forwardX * REAR_TO_CENTER_OFFSET;
+  playerWorldZ = player.mesh.position.z - forwardZ * REAR_TO_CENTER_OFFSET;
+  // 物理状態リセット
+  leftWheelVel = 0;
+  rightWheelVel = 0;
+  chairVelocity = 0;
+  chairAngularVel = 0;
+  // ジョイスティック入力リセット
+  joyInput.x = 0; joyInput.y = 0;
+  resetJoyKnob();
+  players.forEach(p => p.mesh.userData.ring.visible = (p !== player));
+  // 一人称時は自分の頭・体・腕・足を非表示（後頭部や目玉が見えるのを防ぐ）
+  if (player.mesh.userData.bodyParts) {
+    player.mesh.userData.bodyParts.visible = false;
+  }
+  startTransitionTo('fps');
+}
+
+// 遷移時のFOV補間用
+let transitionFromFOV = FOV_TOP;
+let transitionToFOV = FOV_TOP;
+
+function updateTransition() {
+  const elapsed = performance.now() - transitionStart;
+  const t = Math.min(elapsed / transitionDuration, 1);
+  const e = easeInOutCubic(t);
+  
+  let targetPos, targetLook;
+  if (transitionTargetType === 'fps') {
+    const eyeWorld = new THREE.Vector3();
+    fpsPlayer.mesh.userData.eyePos.getWorldPosition(eyeWorld);
+    targetPos = eyeWorld.clone();
+    targetLook = eyeWorld.clone();
+    targetLook.x += Math.sin(fpsYaw) * 5;
+    targetLook.z += Math.cos(fpsYaw) * 5;
+  } else {
+    targetPos = TOP_CAM_POS.clone();
+    targetLook = TOP_CAM_LOOK.clone();
+  }
+  
+  const curPos = transitionFromPos.clone().lerp(targetPos, e);
+  const curLook = transitionFromLook.clone().lerp(targetLook, e);
+  camera.position.copy(curPos);
+  camera.lookAt(curLook);
+  // FOVも補間
+  camera.fov = transitionFromFOV + (transitionToFOV - transitionFromFOV) * e;
+  camera.updateProjectionMatrix();
+  
+  if (t >= 1) {
+    finishTransition();
+  }
+}
+
+// 後輪中心からモデル原点（=幾何中心）までのオフセット（モデル空間で +Z方向に0.3m）
+// 後輪中心からモデル原点（=幾何中心）までのオフセット
+// 実機 Strike Force では後輪が車体中心近くにあるので、オフセットは小さい（0.15m）
+const REAR_TO_CENTER_OFFSET = 0.15;
+
+function updateFPSCamera() {
+  if (!fpsPlayer) return;
+  // playerWorldX/Z は「後輪中心」の位置として扱う
+  // モデル原点（幾何中心）はそこから前方に REAR_TO_CENTER_OFFSET ずれる
+  const forwardX = Math.sin(fpsYaw);
+  const forwardZ = Math.cos(fpsYaw);
+  fpsPlayer.mesh.position.x = playerWorldX + forwardX * REAR_TO_CENTER_OFFSET;
+  fpsPlayer.mesh.position.z = playerWorldZ + forwardZ * REAR_TO_CENTER_OFFSET;
+  fpsPlayer.mesh.rotation.y = fpsYaw;
+  const eyeWorld = new THREE.Vector3();
+  fpsPlayer.mesh.userData.eyePos.getWorldPosition(eyeWorld);
+  camera.position.copy(eyeWorld);
+  const lookX = eyeWorld.x + Math.sin(fpsYaw) * Math.cos(fpsPitch) * 10;
+  const lookY = eyeWorld.y + Math.sin(fpsPitch) * 10;
+  const lookZ = eyeWorld.z + Math.cos(fpsYaw) * Math.cos(fpsPitch) * 10;
+  camera.lookAt(lookX, lookY, lookZ);
+}
+
+// =================================
+// 俯瞰時の入力（選手 or ボール）
+// =================================
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let touchStartTime = 0;
+let touchStartX = 0, touchStartY = 0;
+let isDragging = false;
+let dragTarget = null;  // player object or 'ball'
+let dragLastX = 0, dragLastZ = 0;
+let selectedPlayer = null;
+
+function getCanvasPos(e) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return {
+    nx: ((t.clientX - rect.left) / rect.width) * 2 - 1,
+    ny: -((t.clientY - rect.top) / rect.height) * 2 + 1,
+    cx: t.clientX, cy: t.clientY
+  };
+}
+
+function findPlayerOrBall(nx, ny) {
+  pointer.x = nx; pointer.y = ny;
+  raycaster.setFromCamera(pointer, camera);
+  // ボールを優先チェック
+  const ballBox = new THREE.Box3().setFromObject(ball);
+  ballBox.expandByScalar(0.15);
+  const target = new THREE.Vector3();
+  if (raycaster.ray.intersectBox(ballBox, target)) {
+    return { type: 'ball', obj: ball };
+  }
+  for (const p of players) {
+    const box = new THREE.Box3().setFromObject(p.mesh);
+    if (raycaster.ray.intersectBox(box, target)) {
+      return { type: 'player', obj: p };
+    }
+  }
+  return null;
+}
+
+function onTopPointerDown(e) {
+  if (mode !== 'top') return;
+  if (document.getElementById('playerSelectModal').classList.contains('show')) return;
+  const p = getCanvasPos(e);
+  touchStartTime = Date.now();
+  touchStartX = p.cx;
+  touchStartY = p.cy;
+  isDragging = false;
+  dragTarget = findPlayerOrBall(p.nx, p.ny);
+}
+
+function onTopPointerMove(e) {
+  if (mode !== 'top' || !dragTarget) return;
+  const p = getCanvasPos(e);
+  const dx = p.cx - touchStartX;
+  const dy = p.cy - touchStartY;
+  if (!isDragging && Math.hypot(dx, dy) > 10) isDragging = true;
+  if (isDragging) {
+    e.preventDefault();
+    pointer.x = p.nx; pointer.y = p.ny;
+    raycaster.setFromCamera(pointer, camera);
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const target = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(plane, target)) {
+      // 体育館の床全体に拡大（コートライン外もOK）
+      target.x = Math.max(-HALL_W / 2 + 0.5, Math.min(HALL_W / 2 - 0.5, target.x));
+      target.z = Math.max(-HALL_L / 2 + 0.5, Math.min(HALL_L / 2 - 0.5, target.z));
+      if (dragTarget.type === 'player') {
+        // 速度記録（離した時に転がす用）
+        const obj = dragTarget.obj.mesh;
+        dragLastX = obj.position.x;
+        dragLastZ = obj.position.z;
+        obj.position.x = target.x;
+        obj.position.z = target.z;
+      } else if (dragTarget.type === 'ball') {
+        const obj = dragTarget.obj;
+        dragLastX = obj.position.x;
+        dragLastZ = obj.position.z;
+        obj.position.x = target.x;
+        obj.position.z = target.z;
+      }
+    }
+  }
+}
+
+function onTopPointerUp(e) {
+  if (mode !== 'top') return;
+  const elapsed = Date.now() - touchStartTime;
+  if (!isDragging && dragTarget && elapsed < 500) {
+    // タップ：選手なら選択モーダル、ボールならその場で位置リセット選択肢出すか何もしない
+    if (dragTarget.type === 'player') {
+      selectedPlayer = dragTarget.obj;
+      showPlayerModal(selectedPlayer);
+    }
+  } else if (isDragging && dragTarget && dragTarget.type === 'ball') {
+    // ボールをドラッグ離した時：勢いがあれば転がる
+    const obj = dragTarget.obj;
+    const dx = obj.position.x - dragLastX;
+    const dz = obj.position.z - dragLastZ;
+    const speed = Math.hypot(dx, dz);
+    if (speed > 0.02) {
+      // 慣性として速度を保存
+      ball.userData.vx = dx * 8;
+      ball.userData.vz = dz * 8;
+    }
+  }
+  dragTarget = null;
+  isDragging = false;
+}
+
+const canvas = renderer.domElement;
+canvas.addEventListener('mousedown', onTopPointerDown);
+canvas.addEventListener('mousemove', onTopPointerMove);
+canvas.addEventListener('mouseup', onTopPointerUp);
+canvas.addEventListener('touchstart', e => onTopPointerDown(e), { passive: false });
+canvas.addEventListener('touchmove', e => onTopPointerMove(e), { passive: false });
+canvas.addEventListener('touchend', e => onTopPointerUp(e), { passive: false });
+
+// =================================
+// 電動車椅子ジョイスティック
+// =================================
+const wcJoyBase = document.getElementById('wcJoyBase');
+const wcJoyKnob = document.getElementById('wcJoyKnob');
+const lookStick = document.getElementById('lookStick');
+const lookKnob = document.getElementById('lookStickKnob');
+
+let joyInput = { x: 0, y: 0 };       // ジョイスティック入力 -1〜1
+let lookStickInput = { x: 0, y: 0 }; // 視点スティック入力
+
+function resetJoyKnob() {
+  wcJoyKnob.style.left = '50%';
+  wcJoyKnob.style.top = '50%';
+}
+
+function setupJoystick(stickEl, knobEl, callback, isMainJoy) {
+  let active = false;
+  let touchId = null;
+  let rect = null;
+  function start(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const t = e.touches ? e.changedTouches[0] : e;
+    touchId = e.touches ? t.identifier : -1;
+    rect = stickEl.getBoundingClientRect();
+    active = true;
+    move(t.clientX, t.clientY);
+  }
+  function moveEvent(e) {
+    if (!active) return;
+    e.preventDefault();
+    let t;
+    if (e.touches) {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === touchId) { t = e.changedTouches[i]; break; }
+      }
+      if (!t) return;
+    } else { t = e; }
+    move(t.clientX, t.clientY);
+  }
+  function move(cx, cy) {
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dx = cx - centerX;
+    const dy = cy - centerY;
+    const r = rect.width / 2 - (isMainJoy ? 22 : 22);
+    const dist = Math.hypot(dx, dy);
+    let nx = dx, ny = dy;
+    if (dist > r) { nx = (dx / dist) * r; ny = (dy / dist) * r; }
+    knobEl.style.left = `calc(50% + ${nx}px)`;
+    knobEl.style.top = `calc(50% + ${ny}px)`;
+    callback(nx / r, ny / r);
+  }
+  function end(e) {
+    if (!active) return;
+    if (e.touches) {
+      let found = false;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === touchId) { found = true; break; }
+      }
+      if (!found) return;
+    }
+    active = false;
+    // 電磁ブレーキ：スティックを離すと中央に戻る
+    knobEl.style.left = '50%';
+    knobEl.style.top = '50%';
+    callback(0, 0);
+  }
+  stickEl.addEventListener('touchstart', start, { passive: false });
+  stickEl.addEventListener('touchmove', moveEvent, { passive: false });
+  stickEl.addEventListener('touchend', end, { passive: false });
+  stickEl.addEventListener('touchcancel', end, { passive: false });
+  stickEl.addEventListener('mousedown', start);
+  document.addEventListener('mousemove', moveEvent);
+  document.addEventListener('mouseup', end);
+}
+
+setupJoystick(wcJoyBase, wcJoyKnob, (x, y) => { joyInput.x = x; joyInput.y = y; }, true);
+setupJoystick(lookStick, lookKnob, (x, y) => { lookStickInput.x = x; lookStickInput.y = y; }, false);
+
+// 速度ボタン
+document.querySelectorAll('.spdBtn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    speedLevel = parseInt(btn.dataset.speed);
+    document.querySelectorAll('.spdBtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateSpeedIndicator();
+  });
+});
+
+function updateSpeedIndicator() {
+  const leds = document.querySelectorAll('.speedLed');
+  leds.forEach((led, i) => {
+    led.classList.remove('lv1', 'lv2', 'lv3', 'lv4', 'lv5');
+    if (i < speedLevel) {
+      led.classList.add('lv' + speedLevel);
+    }
+  });
+}
+updateSpeedIndicator();
+
+// PCキーボード
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === 'Escape') {
+    if (mode === 'fps') setTopView();
+    else if (mode === 'map2d') exitMap2dView();
+  }
+  const n = parseInt(e.key);
+  if (!isNaN(n) && n >= 1 && n <= 5 && (mode === 'fps' || mode === 'map2d')) {
+    speedLevel = n;
+    document.querySelectorAll('.spdBtn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`.spdBtn[data-speed="${n}"]`);
+    if (btn) btn.classList.add('active');
+    updateSpeedIndicator();
+  }
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+// ★ マウスドラッグで視点：「掴んで動かす」感覚に修正
+// マウスを右にドラッグ = 世界を右に引っ張る = 自分は左を向く（一般的）
+// でも要望は「相手をクリックして左にスライド = 右を向く」
+// つまり、マウス移動と視点の符号を反転させる
+let mouseLookActive = false;
+let lastMouseX = 0, lastMouseY = 0;
+canvas.addEventListener('mousedown', e => {
+  if (mode === 'fps' && isPC()) {
+    mouseLookActive = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    canvas.style.cursor = 'grabbing';
+  }
+});
+canvas.addEventListener('mouseup', e => {
+  mouseLookActive = false;
+  if (mode === 'fps') canvas.style.cursor = 'grab';
+});
+canvas.addEventListener('mouseleave', e => {
+  mouseLookActive = false;
+});
+canvas.addEventListener('mousemove', e => {
+  if (mode === 'fps' && isPC() && mouseLookActive) {
+    const dx = e.clientX - lastMouseX;
+    const dy = e.clientY - lastMouseY;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    // 「掴んだ場所を動かす」感覚：マウスを左に動かす = 世界が左に動く = 自分は右を向く
+    // つまり yaw を +dx
+    fpsYaw -= dx * 0.005;  // 左にドラッグ → 左を向く（自然な感覚）
+    fpsPitch -= dy * 0.005;
+    fpsPitch = Math.max(-0.7, Math.min(0.7, fpsPitch));
+  }
+});
+
+// =================================
+// 差動駆動の物理（実機電動車椅子モデル）
+// =================================
+function updateFPSMovement(dt) {
+  if (mode !== 'fps' && mode !== 'map2d') return;
+  
+  // ジョイスティック入力を取得（タッチ または PC WASD）
+  let jx = joyInput.x;
+  let jy = joyInput.y;
+  if (isPC()) {
+    // WASD/矢印キーをジョイスティック相当の入力に
+    let kx = 0, ky = 0;
+    if (keys['w'] || keys['arrowup']) ky -= 1;
+    if (keys['s'] || keys['arrowdown']) ky += 1;
+    if (keys['a'] || keys['arrowleft']) kx -= 1;
+    if (keys['d'] || keys['arrowright']) kx += 1;
+    if (kx !== 0 || ky !== 0) {
+      const mag = Math.hypot(kx, ky);
+      jx = kx / mag;
+      jy = ky / mag;
+    }
+  }
+  
+  // デッドゾーン
+  const deadzone = 0.10;
+  const jmag = Math.hypot(jx, jy);
+  if (jmag < deadzone) { jx = 0; jy = 0; }
+  // 軸別デッドゾーン
+  const axisDeadzone = 0.15;
+  if (Math.abs(jx) < axisDeadzone) jx = 0;
+  if (Math.abs(jy) < axisDeadzone) jy = 0;
+  
+  // ジョイスティック入力 → 目標の並進速度・角速度を直接計算
+  // 上倒し(jy<0)=前進、右倒し(jx>0)=右旋回
+  const forwardInput = -jy;  // -1〜1
+  const turnInput = jx;       // -1〜1
+  const maxSpeed = SPEED_LEVELS_MPS[speedLevel];
+  // 旋回時に最大限の角速度を出すには、左右輪が逆方向にmaxSpeedで回ればよい
+  // その時の角速度 = (max - (-max)) / WHEEL_BASE = 2*max / WHEEL_BASE
+  const maxAngularVel = (2 * maxSpeed) / WHEEL_BASE;
+  
+  // 目標値（独立に計算 → 純粋な旋回時は並進ゼロを保証）
+  // 右倒し(jx>0) で右旋回 = 上から見て時計回り = Three.js rotation.y 減少 = yaw 減少
+  // fpsYaw += chairAngularVel * dt なので、右倒し時 chairAngularVel は負
+  // → targetAngularVel = -turnInput * maxAngularVel
+  let targetVelocity = forwardInput * maxSpeed;
+  let targetAngularVel = -turnInput * maxAngularVel;
+  
+  // 並進と旋回が両方ある時、左右輪の出力を計算し、最大値を超えたら正規化
+  // 左輪 = velocity + (angularVel * WHEEL_BASE / 2)
+  // 右輪 = velocity - (angularVel * WHEEL_BASE / 2)
+  // ※ ここでの「左輪・右輪」は最大速度に対する制約チェック用
+  const leftOut = targetVelocity + targetAngularVel * WHEEL_BASE / 2;
+  const rightOut = targetVelocity - targetAngularVel * WHEEL_BASE / 2;
+  const maxOut = Math.max(Math.abs(leftOut), Math.abs(rightOut));
+  if (maxOut > maxSpeed) {
+    const scale = maxSpeed / maxOut;
+    targetVelocity *= scale;
+    targetAngularVel *= scale;
+  }
+  
+  // 応答（ソフトスタート/ストップ）
+  const accel = 4.0 + speedLevel * 0.8;
+  const brake = 8.0;
+  const angAccel = accel * 4;  // 旋回は機敏に
+  const angBrake = brake * 4;
+  
+  function approach(current, target, accelRate, brakeRate) {
+    const diff = target - current;
+    let rate;
+    if (Math.abs(target) < 0.01) rate = brakeRate;
+    else if (Math.sign(target) !== Math.sign(current) && Math.abs(current) > 0.05) rate = brakeRate;
+    else rate = accelRate;
+    const maxChange = rate * dt;
+    if (Math.abs(diff) <= maxChange) return target;
+    return current + Math.sign(diff) * maxChange;
+  }
+  
+  // 並進と角速度をそれぞれ独立に更新
+  chairVelocity = approach(chairVelocity, targetVelocity, accel, brake);
+  chairAngularVel = approach(chairAngularVel, targetAngularVel, angAccel, angBrake);
+  
+  // 表示用：差動駆動の逆算で左右輪速度を求める
+  // velocity = (vL + vR) / 2
+  // angularVel = (vR - vL) / WHEEL_BASE  ← 注意：左旋回でyaw増加、左旋回時 vR > vL
+  // → vL = velocity - angularVel * WHEEL_BASE / 2
+  //   vR = velocity + angularVel * WHEEL_BASE / 2
+  leftWheelVel = chairVelocity - chairAngularVel * WHEEL_BASE / 2;
+  rightWheelVel = chairVelocity + chairAngularVel * WHEEL_BASE / 2;
+  
+  fpsYaw += chairAngularVel * dt;
+  
+  // 並進（後輪中心の新位置）
+  let newRearX = playerWorldX + Math.sin(fpsYaw) * chairVelocity * dt;
+  let newRearZ = playerWorldZ + Math.cos(fpsYaw) * chairVelocity * dt;
+  
+  // 衝突判定は幾何中心（後輪中心 + 前方向オフセット）で行う
+  const forwardX = Math.sin(fpsYaw);
+  const forwardZ = Math.cos(fpsYaw);
+  let newCenterX = newRearX + forwardX * REAR_TO_CENTER_OFFSET;
+  let newCenterZ = newRearZ + forwardZ * REAR_TO_CENTER_OFFSET;
+  
+  // 体育館内に制限（幾何中心ベース）
+  newCenterX = Math.max(-HALL_W / 2 + 0.6, Math.min(HALL_W / 2 - 0.6, newCenterX));
+  newCenterZ = Math.max(-HALL_L / 2 + 0.6, Math.min(HALL_L / 2 - 0.6, newCenterZ));
+  
+  // ===== 他の選手との衝突判定 =====
+  // 車椅子を「衝突半径 R = 0.6m の円（中心は幾何中心）」として扱う
+  const COLLISION_R = 0.6;
+  for (const p of players) {
+    if (p === fpsPlayer) continue;
+    const dx = newCenterX - p.mesh.position.x;
+    const dz = newCenterZ - p.mesh.position.z;
+    const dist = Math.hypot(dx, dz);
+    const minDist = COLLISION_R * 2;
+    if (dist < minDist && dist > 0.001) {
+      const overlap = minDist - dist;
+      const nx = dx / dist;
+      const nz = dz / dist;
+      newCenterX += nx * overlap;
+      newCenterZ += nz * overlap;
+      p.mesh.position.x -= nx * overlap * 0.3;
+      p.mesh.position.z -= nz * overlap * 0.3;
+      p.mesh.position.x = Math.max(-HALL_W / 2 + 0.6, Math.min(HALL_W / 2 - 0.6, p.mesh.position.x));
+      p.mesh.position.z = Math.max(-HALL_L / 2 + 0.6, Math.min(HALL_L / 2 - 0.6, p.mesh.position.z));
+      chairVelocity *= 0.3;
+      leftWheelVel *= 0.3;
+      rightWheelVel *= 0.3;
+    }
+  }
+  
+  // ===== ボールとの衝突判定（シュート） =====
+  const ballDx = newCenterX - ball.position.x;
+  const ballDz = newCenterZ - ball.position.z;
+  const ballDist = Math.hypot(ballDx, ballDz);
+  const ballMinDist = COLLISION_R + BALL_D / 2;
+  if (ballDist < ballMinDist && ballDist > 0.001) {
+    const moveX = Math.sin(fpsYaw) * chairVelocity;
+    const moveZ = Math.cos(fpsYaw) * chairVelocity;
+    const nx = -ballDx / ballDist;
+    const nz = -ballDz / ballDist;
+    const impactSpeed = -(moveX * nx + moveZ * nz);
+    const kickStrength = 2.5;
+    if (impactSpeed > 0) {
+      ball.userData.vx = -nx * impactSpeed * kickStrength;
+      ball.userData.vz = -nz * impactSpeed * kickStrength;
+    } else {
+      ball.userData.vx += moveX * 0.3;
+      ball.userData.vz += moveZ * 0.3;
+    }
+    const pushOut = ballMinDist - ballDist + 0.02;
+    ball.position.x -= nx * pushOut;
+    ball.position.z -= nz * pushOut;
+  }
+  
+  // 幾何中心の制限を反映 → 後輪中心位置を更新
+  playerWorldX = newCenterX - forwardX * REAR_TO_CENTER_OFFSET;
+  playerWorldZ = newCenterZ - forwardZ * REAR_TO_CENTER_OFFSET;
+  
+  // 視点スティック（首振りはほぼ無効化、車椅子と視点を一致）
+  // pitchだけは独立で動かす（上下を見る）
+  fpsPitch -= lookStickInput.y * 0.04;
+  fpsPitch = Math.max(-0.7, Math.min(0.7, fpsPitch));
+}
+
+// FPS情報パネル更新
+function updateFPSInfo() {
+  if (mode !== 'fps' || !fpsPlayer) return;
+  const speedKmh = (Math.abs(chairVelocity) * 3.6).toFixed(1);
+  const dir = chairVelocity > 0.05 ? '前進' : chairVelocity < -0.05 ? '後退' : '停止';
+  const turning = chairAngularVel > 0.05 ? '↺左' : chairAngularVel < -0.05 ? '↻右' : '直進';
+  const ballDx = ball.position.x - playerWorldX;
+  const ballDz = ball.position.z - playerWorldZ;
+  const ballDist = Math.hypot(ballDx, ballDz).toFixed(1);
+  const ballSpeed = Math.hypot(ball.userData.vx, ball.userData.vz);
+  const ballSpdStr = ballSpeed > 0.05 ? `(${(ballSpeed * 3.6).toFixed(1)}km/h)` : '';
+  document.getElementById('fpsInfo').innerHTML = 
+    `#${fpsPlayer.number} ${fpsPlayer.name}<br>` +
+    `🏁 ${speedKmh} km/h ${dir} ${turning}<br>` +
+    `⚽ ボール ${ballDist}m ${ballSpdStr}<br>` +
+    `⚙ 速度Lv${speedLevel}`;
+}
+
+// ボール物理（俯瞰でドラッグ離した時に転がる + 車椅子と衝突）
+function updateBallPhysics(dt) {
+  // ===== ボールが動いてる時：車椅子と衝突したら跳ね返る =====
+  const COLLISION_R = 0.6;
+  const ballR = BALL_D / 2;
+  const minDist = COLLISION_R + ballR;
+  for (const p of players) {
+    const dx = ball.position.x - p.mesh.position.x;
+    const dz = ball.position.z - p.mesh.position.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < minDist && dist > 0.001) {
+      // ボールを車椅子の外に押し出す
+      const nx = dx / dist;
+      const nz = dz / dist;
+      const overlap = minDist - dist;
+      ball.position.x += nx * overlap;
+      ball.position.z += nz * overlap;
+      // ボールが車椅子に近づく速度成分を反転（反発）
+      const ballSpeedAlongNormal = ball.userData.vx * nx + ball.userData.vz * nz;
+      if (ballSpeedAlongNormal < 0) {
+        // 近づいてる → 反発
+        const restitution = 0.7;
+        ball.userData.vx -= (1 + restitution) * ballSpeedAlongNormal * nx;
+        ball.userData.vz -= (1 + restitution) * ballSpeedAlongNormal * nz;
+      }
+    }
+  }
+  
+  if (Math.abs(ball.userData.vx) < 0.01 && Math.abs(ball.userData.vz) < 0.01) return;
+  ball.position.x += ball.userData.vx * dt;
+  ball.position.z += ball.userData.vz * dt;
+  // 摩擦（実際のフィールドより少し速く減速）
+  const friction = 1.2;
+  ball.userData.vx -= ball.userData.vx * Math.min(1, friction * dt);
+  ball.userData.vz -= ball.userData.vz * Math.min(1, friction * dt);
+  // 体育館内に制限
+  if (ball.position.x < -HALL_W / 2 + ballR) {
+    ball.position.x = -HALL_W / 2 + ballR;
+    ball.userData.vx *= -0.7;
+  }
+  if (ball.position.x > HALL_W / 2 - ballR) {
+    ball.position.x = HALL_W / 2 - ballR;
+    ball.userData.vx *= -0.7;
+  }
+  if (ball.position.z < -HALL_L / 2 + ballR) {
+    ball.position.z = -HALL_L / 2 + ballR;
+    ball.userData.vz *= -0.7;
+  }
+  if (ball.position.z > HALL_L / 2 - ballR) {
+    ball.position.z = HALL_L / 2 - ballR;
+    ball.userData.vz *= -0.7;
+  }
+  // 回転（転がりに見える）
+  const speed = Math.hypot(ball.userData.vx, ball.userData.vz);
+  if (speed > 0.01) {
+    const angle = Math.atan2(ball.userData.vx, ball.userData.vz);
+    const r = BALL_D / 2;
+    ball.rotation.x += Math.cos(angle) * speed * dt / r;
+    ball.rotation.z -= Math.sin(angle) * speed * dt / r;
+  }
+}
+
+// ボタン
+document.getElementById('fpsBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  if (selectedPlayer) setFPSView(selectedPlayer);
+});
+document.getElementById('map2dBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  if (selectedPlayer) setMap2dView(selectedPlayer);
+});
+document.getElementById('map2dBackBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  exitMap2dView();
+});
+document.getElementById('rotateBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  if (selectedPlayer) selectedPlayer.mesh.rotation.y += Math.PI / 4;
+});
+document.getElementById('cancelBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  document.getElementById('playerSelectModal').classList.remove('show');
+  selectedPlayer = null;
+});
+document.getElementById('fpsBackBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  setTopView();
+});
+document.getElementById('resetBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  players.forEach(p => {
+    p.mesh.position.set(p.homeX, 0, p.homeZ);
+    p.mesh.rotation.y = p.homeAngle;
+  });
+  ball.position.set(0, BALL_D / 2, 0);
+  ball.userData.vx = 0;
+  ball.userData.vz = 0;
+});
+
+// =================================
+// 2Dマップビュー
+// =================================
+const map2dCanvas = document.getElementById('map2dCanvas');
+const map2dCtx = map2dCanvas.getContext('2d');
+let map2dPlayer = null;  // 2Dモードで操作中の選手
+
+function resize2dCanvas() {
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  map2dCanvas.width = w;
+  map2dCanvas.height = h;
+}
+window.addEventListener('resize', resize2dCanvas);
+
+function setMap2dView(player) {
+  mode = 'map2d';
+  map2dPlayer = player;
+  fpsPlayer = player;  // 物理計算共用のため
+  fpsYaw = player.mesh.rotation.y;
+  const forwardX = Math.sin(fpsYaw);
+  const forwardZ = Math.cos(fpsYaw);
+  playerWorldX = player.mesh.position.x - forwardX * REAR_TO_CENTER_OFFSET;
+  playerWorldZ = player.mesh.position.z - forwardZ * REAR_TO_CENTER_OFFSET;
+  leftWheelVel = 0; rightWheelVel = 0;
+  chairVelocity = 0; chairAngularVel = 0;
+  joyInput.x = 0; joyInput.y = 0;
+  resetJoyKnob();
+  // UI切替
+  document.getElementById('modeLabel').textContent = `🗺️ #${player.number} 2D操作`;
+  document.getElementById('modeLabel').classList.remove('fps', 'transition');
+  document.getElementById('topHint').style.display = 'none';
+  document.getElementById('topActions').style.display = 'none';
+  document.getElementById('playerSelectModal').classList.remove('show');
+  // 3Dビューを隠して2Dを表示
+  renderer.domElement.style.display = 'none';
+  map2dCanvas.classList.add('show');
+  document.getElementById('map2dBackBtn').classList.add('show');
+  document.getElementById('map2dHint').classList.add('show');
+  // コントローラー表示
+  document.getElementById('wcController').classList.add('show');
+  document.getElementById('fpsInfo').style.display = 'block';
+  resize2dCanvas();
+}
+
+function exitMap2dView() {
+  mode = 'top';
+  // 2D操作で動かした位置を3Dモデルに反映
+  if (map2dPlayer) {
+    const forwardX = Math.sin(fpsYaw);
+    const forwardZ = Math.cos(fpsYaw);
+    map2dPlayer.mesh.position.x = playerWorldX + forwardX * REAR_TO_CENTER_OFFSET;
+    map2dPlayer.mesh.position.z = playerWorldZ + forwardZ * REAR_TO_CENTER_OFFSET;
+    map2dPlayer.mesh.rotation.y = fpsYaw;
+  }
+  map2dPlayer = null;
+  fpsPlayer = null;
+  renderer.domElement.style.display = 'block';
+  map2dCanvas.classList.remove('show');
+  document.getElementById('map2dBackBtn').classList.remove('show');
+  document.getElementById('map2dHint').classList.remove('show');
+  document.getElementById('wcController').classList.remove('show');
+  document.getElementById('fpsInfo').style.display = 'none';
+  document.getElementById('modeLabel').textContent = '📐 俯瞰モード';
+  document.getElementById('topHint').style.display = 'block';
+  document.getElementById('topActions').style.display = 'flex';
+  // 全選手のリング再表示
+  players.forEach(p => p.mesh.userData.ring.visible = true);
+  // 俯瞰カメラ
+  TOP_CAM_POS.y = getTopCamHeight();
+  camera.position.copy(TOP_CAM_POS);
+  camera.lookAt(TOP_CAM_LOOK);
+  camera.fov = FOV_TOP;
+  camera.updateProjectionMatrix();
+}
+
+// 2Dマップ更新（物理は updateFPSMovement と共通）
+function updateMap2d(dt) {
+  if (mode !== 'map2d') return;
+  // 物理計算（FPSと同じ）
+  updateFPSMovement(dt);
+}
+
+function drawMap2d() {
+  if (mode !== 'map2d') return;
+  const ctx = map2dCtx;
+  const W = map2dCanvas.width;
+  const H = map2dCanvas.height;
+  // コート(15m × 28m)を画面いっぱいに表示
+  const margin = 10;
+  const scaleX = (W - margin * 2) / COURT_W;
+  const scaleY = (H - margin * 2) / COURT_L;
+  const scale = Math.min(scaleX, scaleY);
+  const offX = W / 2;
+  const offY = H / 2;
+  function w2sx(wx) { return offX + wx * scale; }
+  function w2sy(wz) { return offY - wz * scale; }
+  // 背景：体育館の床（コート外）
+  ctx.fillStyle = '#3a3024';
+  ctx.fillRect(0, 0, W, H);
+  // コート（緑）
+  ctx.fillStyle = '#2d5a3d';
+  const courtX = w2sx(-COURT_W / 2);
+  const courtY = w2sy(COURT_L / 2);
+  const courtW = COURT_W * scale;
+  const courtH = COURT_L * scale;
+  ctx.fillRect(courtX, courtY, courtW, courtH);
+  // コートライン（白）
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(courtX, courtY, courtW, courtH);
+  // センターライン
+  ctx.beginPath();
+  ctx.moveTo(courtX, offY);
+  ctx.lineTo(courtX + courtW, offY);
+  ctx.stroke();
+  // センターサークル
+  ctx.beginPath();
+  ctx.arc(offX, offY, 1.5 * scale, 0, Math.PI * 2);
+  ctx.stroke();
+  // ゴールエリア
+  const gaW = 8 * scale;
+  const gaH = 5 * scale;
+  ctx.strokeRect(offX - gaW/2, w2sy(COURT_L/2), gaW, gaH);
+  ctx.strokeRect(offX - gaW/2, w2sy(-COURT_L/2 + 5), gaW, gaH);
+  // ゴール
+  ctx.fillStyle = '#ffd700';
+  ctx.fillRect(offX - (GOAL_W / 2) * scale, w2sy(-COURT_L/2) - 6, GOAL_W * scale, 6);
+  ctx.fillStyle = '#4a9eff';
+  ctx.fillRect(offX - (GOAL_W / 2) * scale, w2sy(COURT_L/2), GOAL_W * scale, 6);
+  
+  // 選手描画
+  for (const p of players) {
+    const px = w2sx(p.mesh.position.x);
+    const py = w2sy(p.mesh.position.z);
+    const isMe = (p === map2dPlayer);
+    // 自分の場合は、現在の位置（後輪中心+前方オフセット）を使う
+    let drawX = px, drawY = py;
+    let drawYaw = p.mesh.rotation.y;
+    if (isMe) {
+      const fx = Math.sin(fpsYaw);
+      const fz = Math.cos(fpsYaw);
+      const wx = playerWorldX + fx * REAR_TO_CENTER_OFFSET;
+      const wz = playerWorldZ + fz * REAR_TO_CENTER_OFFSET;
+      drawX = w2sx(wx);
+      drawY = w2sy(wz);
+      drawYaw = fpsYaw;
+    }
+    drawChair2d(ctx, drawX, drawY, drawYaw, p.team, p.number, isMe, scale);
+  }
+  
+  // 自分の回転中心マーカーを「後輪中心の絶対位置」に描画（旋回時に動かない）
+  if (map2dPlayer) {
+    const rearScreenX = w2sx(playerWorldX);
+    const rearScreenY = w2sy(playerWorldZ);
+    // 大きめの黄色いマーカー（十字とリング）
+    ctx.fillStyle = '#ff0';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(rearScreenX, rearScreenY, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // 十字線（回転軸を強調）
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(rearScreenX - 12, rearScreenY);
+    ctx.lineTo(rearScreenX + 12, rearScreenY);
+    ctx.moveTo(rearScreenX, rearScreenY - 12);
+    ctx.lineTo(rearScreenX, rearScreenY + 12);
+    ctx.stroke();
+    // ラベル
+    ctx.fillStyle = '#ff0';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('回転軸', rearScreenX + 14, rearScreenY);
+  }
+  // ボール
+  const bx = w2sx(ball.position.x);
+  const by = w2sy(ball.position.z);
+  // ボール影
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.arc(bx + 2, by + 2, (BALL_D / 2) * scale * 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  // ボール本体（見やすさ重視で1.5倍）
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(bx, by, (BALL_D / 2) * scale * 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // ボールの黒点（サッカーボール感）
+  ctx.fillStyle = '#000';
+  const dotR = (BALL_D / 2) * scale * 0.3;
+  ctx.beginPath();
+  ctx.arc(bx - dotR * 0.5, by - dotR * 0.5, dotR * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(bx + dotR * 0.7, by + dotR * 0.3, dotR * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  // ボール速度ベクトル
+  const bvSpeed = Math.hypot(ball.userData.vx, ball.userData.vz);
+  if (bvSpeed > 0.1) {
+    ctx.strokeStyle = '#ff0';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(bx + ball.userData.vx * scale * 0.5, by - ball.userData.vz * scale * 0.5);
+    ctx.stroke();
+  }
+}
+
+function drawChair2d(ctx, px, py, yaw, team, number, isMe, scale) {
+  // 2D画面の座標系：画面上=+Y=世界の+Z（北、攻撃方向）
+  // ワールドの回転 (yaw) は反時計回り正、画面の回転も標準で反時計回り正なので
+  // ctx.rotate(yaw) でそのまま使える（Y軸反転していないため）
+  // ただし、ワールドのyaw=0で+Z方向を向くが、画面のctx.rotate(0)では+X(右)方向が"前"になる。
+  // つまり、ワールドのyaw=0 を画面の「上方向(-Y)」に対応させるため、π/2 を引く。
+  // → ctx.rotate(-yaw - Math.PI/2)
+  const drawAngle = -yaw - Math.PI / 2;
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(drawAngle);
+  // ローカル座標：+X方向が前方
+  // 車体サイズ（見やすく1.4倍）
+  const cl = CHAIR_L * scale * 1.4;  // 全長（+X方向）
+  const cw = CHAIR_W * scale * 1.4;  // 幅
+  
+  // 影
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(-cl/2 + 2, -cw/2 + 2, cl, cw);
+  // メインフレーム（長方形）
+  ctx.fillStyle = team === 'blue' ? '#1e5cb8' : '#c43850';
+  ctx.fillRect(-cl/2, -cw/2, cl, cw);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-cl/2, -cw/2, cl, cw);
+  
+  // 番号（中央）
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${Math.max(12, cw * 0.55)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // 画面に対して正しく番号が読めるよう、回転を打ち消す
+  ctx.save();
+  ctx.rotate(-drawAngle);
+  ctx.fillText(number, 0, 0);
+  ctx.restore();
+  
+  // 前方フットガード（前端の黒バー）
+  ctx.fillStyle = '#000';
+  ctx.fillRect(cl/2 - 3, -cw/2 - 2, 5, cw + 4);
+  
+  // 後輪（車体後方の左右、回転軸の位置）
+  // 後輪は回転軸（後輪中心=モデル-Z=ローカル-X側）
+  const rearX = -cl * 0.27;  // モデル後輪位置
+  ctx.fillStyle = '#000';
+  ctx.fillRect(rearX - 5, -cw/2 - 4, 10, 4);
+  ctx.fillRect(rearX - 5, cw/2, 10, 4);
+  
+  // 前輪（キャスター、前方の左右）
+  const frontX = cl * 0.32;
+  ctx.fillStyle = '#666';
+  ctx.fillRect(frontX - 3, -cw/2 - 3, 6, 3);
+  ctx.fillRect(frontX - 3, cw/2, 6, 3);
+  
+  // 自分マーク
+  if (isMe) {
+    // 金色の枠
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-cl/2 - 4, -cw/2 - 6, cl + 8, cw + 12);
+    
+    // 進行方向矢印（前方=+X）
+    ctx.strokeStyle = '#0ff';
+    ctx.fillStyle = '#0ff';
+    ctx.lineWidth = 4;
+    const arrowStart = cl/2 + 8;
+    const arrowEnd = cl/2 + 28;
+    ctx.beginPath();
+    ctx.moveTo(arrowStart, 0);
+    ctx.lineTo(arrowEnd, 0);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(arrowEnd + 4, 0);
+    ctx.lineTo(arrowEnd - 6, -7);
+    ctx.lineTo(arrowEnd - 6, 7);
+    ctx.closePath();
+    ctx.fill();
+    
+    // 回転中心は外側で描画（playerWorldX/Zの絶対位置に固定）
+  }
+  ctx.restore();
+  
+  // 左右輪速度を画面に固定表示（回転しない）
+  if (isMe) {
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    ctx.fillRect(px - 50, py + 35, 100, 30);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const lw = leftWheelVel.toFixed(2);
+    const rw = rightWheelVel.toFixed(2);
+    ctx.fillText(`L:${lw} R:${rw}`, px, py + 44);
+    const turning = chairAngularVel > 0.05 ? '↺ 左旋回' : chairAngularVel < -0.05 ? '↻ 右旋回' : '直進';
+    ctx.fillText(turning, px, py + 58);
+  }
+}
+
+// 2DマップのFPS情報用に updateFPSInfo を共用化
+const _originalUpdateFPSInfo = updateFPSInfo;
+updateFPSInfo = function() {
+  if ((mode !== 'fps' && mode !== 'map2d') || (!fpsPlayer && !map2dPlayer)) return;
+  const p = fpsPlayer || map2dPlayer;
+  const speedKmh = (Math.abs(chairVelocity) * 3.6).toFixed(1);
+  const dir = chairVelocity > 0.05 ? '前進' : chairVelocity < -0.05 ? '後退' : '停止';
+  const turning = chairAngularVel > 0.05 ? '↺左' : chairAngularVel < -0.05 ? '↻右' : '直進';
+  const ballDx = ball.position.x - playerWorldX;
+  const ballDz = ball.position.z - playerWorldZ;
+  const ballDist = Math.hypot(ballDx, ballDz).toFixed(1);
+  const ballSpeed = Math.hypot(ball.userData.vx, ball.userData.vz);
+  const ballSpdStr = ballSpeed > 0.05 ? `(${(ballSpeed * 3.6).toFixed(1)}km/h)` : '';
+  document.getElementById('fpsInfo').innerHTML = 
+    `#${p.number} ${p.name}<br>` +
+    `🏁 ${speedKmh} km/h ${dir} ${turning}<br>` +
+    `⚽ ボール ${ballDist}m ${ballSpdStr}<br>` +
+    `⚙ 速度Lv${speedLevel}`;
+};
+
+// ループ
+let lastTime = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+  
+  if (mode === 'transition') {
+    updateTransition();
+  } else if (mode === 'fps') {
+    updateFPSMovement(dt);
+    updateFPSCamera();
+    updateFPSInfo();
+  } else if (mode === 'map2d') {
+    updateMap2d(dt);
+    updateFPSInfo();
+  }
+  
+  updateBallPhysics(dt);
+  
+  if (mode === 'map2d') {
+    drawMap2d();
+  } else {
+    renderer.render(scene, camera);
+  }
+}
+
+resize();
+// 初期表示は俯瞰（カメラ高さをアスペクトに合わせて計算）
+TOP_CAM_POS.y = getTopCamHeight();
+camera.position.copy(TOP_CAM_POS);
+camera.lookAt(TOP_CAM_LOOK);
+players.forEach(p => p.mesh.userData.ring.visible = true);
+animate();
+</script>
+</body>
+</html>
