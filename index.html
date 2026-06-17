@@ -1085,8 +1085,8 @@ function resize() {
 window.addEventListener('resize', resize);
 
 // 照明
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const mainLight = new THREE.DirectionalLight(0xffffff, 0.55);
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
 mainLight.position.set(10, 22, 8);
 mainLight.castShadow = true;
 mainLight.shadow.mapSize.set(1024, 1024);
@@ -1098,32 +1098,25 @@ mainLight.shadow.camera.near = 1;
 mainLight.shadow.camera.far = 60;
 scene.add(mainLight);
 
-// 天井ライト（梁は削除、ライトのみ）
+// 天井ライト（光源のみ、見える物体は削除して映り込みを防ぐ）
 function addCeilingLight(x, z) {
-  const light = new THREE.PointLight(0xfff4e0, 0.35, 22);
+  // 強度を下げて、減衰距離を短くすることで床への光円を弱める
+  const light = new THREE.PointLight(0xfff4e0, 0.2, 15);
   light.position.set(x, 9, z);
   scene.add(light);
-  const fixture = new THREE.Mesh(
-    new THREE.BoxGeometry(0.8, 0.15, 0.8),
-    new THREE.MeshStandardMaterial({ color: 0xeeeeee, emissive: 0xfff4e0, emissiveIntensity: 0.6 })
-  );
-  fixture.position.set(x, 9.9, z);
-  scene.add(fixture);
 }
-for (let x = -8; x <= 8; x += 8) {
-  for (let z = -12; z <= 12; z += 6) {
+// ライトの数を減らす（3列→2列、5行→3行）
+for (let x = -6; x <= 6; x += 12) {
+  for (let z = -10; z <= 10; z += 10) {
     addCeilingLight(x, z);
   }
 }
 
-// 床（光沢のあるバスケコート床）
-const floorMat = new THREE.MeshPhysicalMaterial({
+// 床（バスケコート床：光沢を抑えて自然な見た目に）
+const floorMat = new THREE.MeshStandardMaterial({
   color: 0xd4a574,
-  roughness: 0.25,
-  metalness: 0.0,
-  clearcoat: 0.8,
-  clearcoatRoughness: 0.15,
-  reflectivity: 0.4
+  roughness: 0.7,
+  metalness: 0.0
 });
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALL_W, HALL_L), floorMat);
 floor.rotation.x = -Math.PI / 2;
@@ -2396,12 +2389,14 @@ let lookStickInput = { x: 0, y: 0 }; // 視点スティック入力
 function resetJoyKnob() {
   wcJoyKnob.style.left = '50%';
   wcJoyKnob.style.top = '50%';
+  wcJoyKnob.style.transform = 'translate(-50%, -50%)';
 }
 
 function setupJoystick(stickEl, knobEl, callback, isMainJoy) {
   let active = false;
   let touchId = null;
   let rect = null;
+  let startX = 0, startY = 0;  // タッチ開始位置（基準点）
   function start(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -2409,7 +2404,17 @@ function setupJoystick(stickEl, knobEl, callback, isMainJoy) {
     touchId = e.touches ? t.identifier : -1;
     rect = stickEl.getBoundingClientRect();
     active = true;
-    move(t.clientX, t.clientY);
+    // タッチ開始位置を基準点として記録
+    startX = t.clientX;
+    startY = t.clientY;
+    // ノブをタッチ位置に移動（スティック領域内の相対位置）
+    const localX = t.clientX - rect.left;
+    const localY = t.clientY - rect.top;
+    knobEl.style.left = `${localX}px`;
+    knobEl.style.top = `${localY}px`;
+    knobEl.style.transform = 'translate(-50%, -50%)';
+    // 入力は0のまま（中心から動いていない）
+    callback(0, 0);
   }
   function moveEvent(e) {
     if (!active) return;
@@ -2424,16 +2429,19 @@ function setupJoystick(stickEl, knobEl, callback, isMainJoy) {
     move(t.clientX, t.clientY);
   }
   function move(cx, cy) {
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const dx = cx - centerX;
-    const dy = cy - centerY;
-    const r = rect.width / 2 - (isMainJoy ? 22 : 22);
+    // タッチ開始位置からの差分を計算（相対座標方式）
+    const dx = cx - startX;
+    const dy = cy - startY;
+    const r = rect.width / 2 - 22;  // ノブが動ける最大半径
     const dist = Math.hypot(dx, dy);
     let nx = dx, ny = dy;
     if (dist > r) { nx = (dx / dist) * r; ny = (dy / dist) * r; }
-    knobEl.style.left = `calc(50% + ${nx}px)`;
-    knobEl.style.top = `calc(50% + ${ny}px)`;
+    // ノブを「開始位置 + 差分」で配置（スティック領域内のpx座標）
+    const localX = (startX - rect.left) + nx;
+    const localY = (startY - rect.top) + ny;
+    knobEl.style.left = `${localX}px`;
+    knobEl.style.top = `${localY}px`;
+    knobEl.style.transform = 'translate(-50%, -50%)';
     callback(nx / r, ny / r);
   }
   function end(e) {
@@ -2449,6 +2457,7 @@ function setupJoystick(stickEl, knobEl, callback, isMainJoy) {
     // 電磁ブレーキ：スティックを離すと中央に戻る
     knobEl.style.left = '50%';
     knobEl.style.top = '50%';
+    knobEl.style.transform = 'translate(-50%, -50%)';
     callback(0, 0);
   }
   stickEl.addEventListener('touchstart', start, { passive: false });
