@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>SFC Delteas 戦術ビューア v13</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>SFC Delteas 戦術ビューア v13.5 - 俯瞰追従モード追加</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
   html, body { overscroll-behavior: none; height: 100%; }
@@ -68,14 +71,16 @@
   }
   #fpsInfo {
     position: absolute;
-    top: 12px;
+    top: 50px;
     right: 12px;
-    background: rgba(0,0,0,0.75);
-    padding: 8px 14px;
-    border-radius: 8px;
-    font-size: 13px;
+    background: rgba(0,0,0,0.7);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.5;
     z-index: 10;
     display: none;
+    color: #fff;
   }
   /* 2Dマップビュー */
   #map2dCanvas {
@@ -233,6 +238,10 @@
   .modalBtn.map2d {
     background: linear-gradient(135deg, #00c9a7, #008a72);
     box-shadow: 0 4px 12px rgba(0, 201, 167, 0.3);
+  }
+  .modalBtn.followCam {
+    background: linear-gradient(135deg, #7e57c2, #4a2c8f);
+    box-shadow: 0 4px 12px rgba(126, 87, 194, 0.3);
   }
   .modalBtn.rotate {
     background: linear-gradient(135deg, #ff9900, #cc6600);
@@ -680,6 +689,10 @@
         <span class="icon">👁</span>
         <span class="label">この選手の目線で見る (3D)</span>
       </button>
+      <button class="modalBtn followCam" id="followCamBtn">
+        <span class="icon">📐</span>
+        <span class="label">俯瞰追従で操作する (3D)</span>
+      </button>
       <button class="modalBtn map2d" id="map2dBtn">
         <span class="icon">🗺️</span>
         <span class="label">2Dマップで操作する</span>
@@ -698,10 +711,7 @@
   <!-- 2Dマップビュー（オーバーレイ） -->
   <canvas id="map2dCanvas"></canvas>
   <button id="map2dBackBtn">⬅ 3Dビューに戻る</button>
-  <div id="map2dHint">
-    ジョイスティック・スティック操作で動く<br>
-    ボールに当てて転がそう
-  </div>
+  <div id="map2dHint" style="display:none"></div>
   <div class="stickLabel" id="lookLabel">視点</div>
   <div id="lookStick"><div id="lookStickKnob"></div></div>
   
@@ -866,6 +876,7 @@ document.getElementById('btnResetAvatars').onclick = () => {
 document.getElementById('btnHome').onclick = () => {
   if (mode === 'fps') setTopView();
   else if (mode === 'map2d') exitMap2dView();
+  else if (mode === 'followCam') exitFollowCamView();
   setTimeout(showTitle, mode === 'transition' ? 1300 : 0);
 };
 
@@ -1031,7 +1042,7 @@ showTitle();
 const COURT_W = 15;
 const COURT_L = 28;
 const GOAL_W = 6;
-const BALL_D = 0.325;
+const BALL_D = 0.33;  // FIPFA公式：直径33cm（13インチ）、重量約1kg
 const CHAIR_W = 0.65;
 const CHAIR_L = 1.10;
 const HALL_W = 36;  // ベンチ・オフィシャルエリアを含む
@@ -1791,8 +1802,8 @@ makeGoal(hl, 0x2d8a3d);
 function createPowerchair(color, number) {
   const g = new THREE.Group();
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.5 });
-  const baseFrame = new THREE.Mesh(new THREE.BoxGeometry(CHAIR_W * 0.85, 0.18, CHAIR_L * 0.65), frameMat);
-  baseFrame.position.set(0, 0.22, -0.1);
+  const baseFrame = new THREE.Mesh(new THREE.BoxGeometry(CHAIR_W * 0.85, 0.14, CHAIR_L * 0.65), frameMat);
+  baseFrame.position.set(0, 0.18, -0.1);
   baseFrame.castShadow = true;
   g.add(baseFrame);
   const battery = new THREE.Mesh(
@@ -1829,23 +1840,24 @@ function createPowerchair(color, number) {
     }
     return wg;
   }
-  // 駆動輪（後輪）：実機 Strike Force は約直径30cm、半径15cm
-  // タイヤ位置 y = radius（地面に接地）
-  const REAR_R = 0.16;
-  const lRear = makeWheel(REAR_R, 0.10, true);
-  // 後輪（駆動輪）：車体中央からわずか後方
-  lRear.position.set(-CHAIR_W / 2 - 0.03, REAR_R, -0.15);
+  // 駆動輪（後輪）：実機 Strike Force は約直径25cm、半径12.5cm（小型化）
+  const REAR_R = 0.125;
+  const lRear = makeWheel(REAR_R, 0.08, true);
+  lRear.position.set(-CHAIR_W / 2 - 0.02, REAR_R, -0.15);
   g.add(lRear);
-  const rRear = makeWheel(REAR_R, 0.10, true);
-  rRear.position.set(CHAIR_W / 2 + 0.03, REAR_R, -0.15);
+  const rRear = makeWheel(REAR_R, 0.08, true);
+  rRear.position.set(CHAIR_W / 2 + 0.02, REAR_R, -0.15);
   g.add(rRear);
-  // 前輪（キャスター）：小さめ、半径8cm
-  const FRONT_R = 0.08;
-  const lFront = makeWheel(FRONT_R, 0.06, false);
-  lFront.position.set(-CHAIR_W / 2 - 0.02, FRONT_R, 0.18);
+  // 前輪（キャスター）：デバッグ用に一時非表示
+  // 後輪のみで斜めに進む現象があれば、前輪は無関係 = 物理計算の問題
+  const FRONT_R = 0.075;
+  const lFront = makeWheel(FRONT_R, 0.05, false);
+  lFront.position.set(-CHAIR_W / 2 - 0.01, FRONT_R, 0.18);
+  lFront.visible = false;  // 非表示
   g.add(lFront);
-  const rFront = makeWheel(FRONT_R, 0.06, false);
-  rFront.position.set(CHAIR_W / 2 + 0.02, FRONT_R, 0.18);
+  const rFront = makeWheel(FRONT_R, 0.05, false);
+  rFront.position.set(CHAIR_W / 2 + 0.01, FRONT_R, 0.18);
+  rFront.visible = false;  // 非表示
   g.add(rFront);
   const bumperMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.85, roughness: 0.3 });
   const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(CHAIR_W + 0.25, 0.18, 0.08), bumperMat);
@@ -1969,7 +1981,7 @@ function createPowerchair(color, number) {
   sprite.scale.set(0.28, 0.28, 1);
   g.add(sprite);
   const eye = new THREE.Object3D();
-  eye.position.set(0, 1.45, -CHAIR_L * 0.35);  // やや高め・後方寄り、車椅子全体が見える
+  eye.position.set(0, 1.45, -0.15);  // 後輪中心の真上（旋回軸の上）
   g.add(eye);
   g.userData.eyePos = eye;
   g.userData.number = number;
@@ -2040,6 +2052,11 @@ const ball = createBall();
 ball.position.set(0, BALL_D / 2, 0);
 ball.userData.vx = 0;
 ball.userData.vz = 0;
+// 角速度（rad/s）：ボールが地面で転がる時、自分の軸まわりに回転する角速度
+// 「線速度 / 半径」と一致する時、完全に転がっている状態（純粋転がり）
+// 一致しない時は床と滑っている → 動摩擦で揃えていく
+ball.userData.omegaX = 0;  // X軸周り角速度（前後転がり用）
+ball.userData.omegaZ = 0;  // Z軸周り角速度（横転がり用）
 scene.add(ball);
 
 // =================================
@@ -2501,9 +2518,10 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (mode === 'fps') setTopView();
     else if (mode === 'map2d') exitMap2dView();
+    else if (mode === 'followCam') exitFollowCamView();
   }
   const n = parseInt(e.key);
-  if (!isNaN(n) && n >= 1 && n <= 5 && (mode === 'fps' || mode === 'map2d')) {
+  if (!isNaN(n) && n >= 1 && n <= 5 && (mode === 'fps' || mode === 'map2d' || mode === 'followCam')) {
     speedLevel = n;
     document.querySelectorAll('.spdBtn').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`.spdBtn[data-speed="${n}"]`);
@@ -2550,15 +2568,17 @@ canvas.addEventListener('mousemove', e => {
 
 // =================================
 // 差動駆動の物理（実機電動車椅子モデル）
+// 完全書き直し版：シンプル＆正確
 // =================================
 function updateFPSMovement(dt) {
-  if (mode !== 'fps' && mode !== 'map2d') return;
+  if (mode !== 'fps' && mode !== 'map2d' && mode !== 'followCam') return;
   
-  // ジョイスティック入力を取得（タッチ または PC WASD）
+  // -----------------------------
+  // STEP 1: ジョイスティック入力取得
+  // -----------------------------
   let jx = joyInput.x;
   let jy = joyInput.y;
   if (isPC()) {
-    // WASD/矢印キーをジョイスティック相当の入力に
     let kx = 0, ky = 0;
     if (keys['w'] || keys['arrowup']) ky -= 1;
     if (keys['s'] || keys['arrowdown']) ky += 1;
@@ -2571,91 +2591,114 @@ function updateFPSMovement(dt) {
     }
   }
   
-  // デッドゾーン
-  const deadzone = 0.10;
-  const jmag = Math.hypot(jx, jy);
-  if (jmag < deadzone) { jx = 0; jy = 0; }
-  // 軸別デッドゾーン
-  const axisDeadzone = 0.15;
-  if (Math.abs(jx) < axisDeadzone) jx = 0;
-  if (Math.abs(jy) < axisDeadzone) jy = 0;
+  // -----------------------------
+  // STEP 2: 入力のリニア化（100段階の連続的反応）
+  // -----------------------------
+  // 設計思想：
+  //   - 0〜1の連続値を取り、スティックの倒し量に完全比例した速度を出力
+  //   - デッドゾーンは「触れていない判定」のためだけに最小限（0.08）
+  //   - 出力カーブは「実機の電動車椅子のジョイスティック応答」と同じく
+  //     入力^1.7 程度の緩い指数カーブ（微小入力で精密、深く倒すと急速）
+  //     実機ジョイスティック説明書の標準応答に準拠
+  const RAW_DEADZONE = 0.08;  // 最小限のデッドゾーン（指離した判定用）
+  const jMag = Math.hypot(jx, jy);
+  if (jMag < RAW_DEADZONE) {
+    jx = 0; jy = 0;
+  } else {
+    // デッドゾーン分を引いて再正規化（連続性確保）
+    const adjusted = (jMag - RAW_DEADZONE) / (1.0 - RAW_DEADZONE);
+    // 指数カーブを適用（実機ジョイスティックの応答カーブ）
+    // exponent 1.7 = 微小入力では超精密、フル倒しで最大
+    const responseCurve = Math.pow(Math.min(1, adjusted), 1.7);
+    const scale = responseCurve / jMag;
+    jx *= scale;
+    jy *= scale;
+  }
   
-  // ジョイスティック入力 → 目標の並進速度・角速度を直接計算
-  // 上倒し(jy<0)=前進、右倒し(jx>0)=右旋回
-  const forwardInput = -jy;  // -1〜1
-  const turnInput = jx;       // -1〜1
+  // -----------------------------
+  // STEP 3: 入力 → 目標値の計算
+  // -----------------------------
+  //   jy < 0（上倒し） = 前進
+  //   jx > 0（右倒し） = 右旋回
   const maxSpeed = SPEED_LEVELS_MPS[speedLevel];
-  // 旋回時に最大限の角速度を出すには、左右輪が逆方向にmaxSpeedで回ればよい
-  // その時の角速度 = (max - (-max)) / WHEEL_BASE = 2*max / WHEEL_BASE
   const maxAngularVel = (2 * maxSpeed) / WHEEL_BASE;
   
-  // 目標値（独立に計算 → 純粋な旋回時は並進ゼロを保証）
-  // 右倒し(jx>0) で右旋回 = 上から見て時計回り = Three.js rotation.y 減少 = yaw 減少
-  // fpsYaw += chairAngularVel * dt なので、右倒し時 chairAngularVel は負
-  // → targetAngularVel = -turnInput * maxAngularVel
-  let targetVelocity = forwardInput * maxSpeed;
-  let targetAngularVel = -turnInput * maxAngularVel;
+  let targetVelocity = -jy * maxSpeed;
+  let targetAngularVel = -jx * maxAngularVel;
   
-  // 並進と旋回が両方ある時、左右輪の出力を計算し、最大値を超えたら正規化
-  // 左輪 = velocity + (angularVel * WHEEL_BASE / 2)
-  // 右輪 = velocity - (angularVel * WHEEL_BASE / 2)
-  // ※ ここでの「左輪・右輪」は最大速度に対する制約チェック用
+  // 左右輪速度制限の正規化（並進と旋回が両方ある時、実機通り）
   const leftOut = targetVelocity + targetAngularVel * WHEEL_BASE / 2;
   const rightOut = targetVelocity - targetAngularVel * WHEEL_BASE / 2;
   const maxOut = Math.max(Math.abs(leftOut), Math.abs(rightOut));
   if (maxOut > maxSpeed) {
-    const scale = maxSpeed / maxOut;
-    targetVelocity *= scale;
-    targetAngularVel *= scale;
+    const sc = maxSpeed / maxOut;
+    targetVelocity *= sc;
+    targetAngularVel *= sc;
   }
   
-  // 応答（ソフトスタート/ストップ）
+  // -----------------------------
+  // STEP 4: モーター応答（ソフトスタート/ストップ）
+  // -----------------------------
   const accel = 4.0 + speedLevel * 0.8;
   const brake = 8.0;
-  const angAccel = accel * 4;  // 旋回は機敏に
+  const angAccel = accel * 4;
   const angBrake = brake * 4;
   
   function approach(current, target, accelRate, brakeRate) {
     const diff = target - current;
     let rate;
-    if (Math.abs(target) < 0.01) rate = brakeRate;
-    else if (Math.sign(target) !== Math.sign(current) && Math.abs(current) > 0.05) rate = brakeRate;
+    if (Math.abs(target) < 0.001) rate = brakeRate;
+    else if (current * target < 0 && Math.abs(current) > 0.05) rate = brakeRate;
     else rate = accelRate;
     const maxChange = rate * dt;
     if (Math.abs(diff) <= maxChange) return target;
     return current + Math.sign(diff) * maxChange;
   }
   
-  // 並進と角速度をそれぞれ独立に更新
   chairVelocity = approach(chairVelocity, targetVelocity, accel, brake);
   chairAngularVel = approach(chairAngularVel, targetAngularVel, angAccel, angBrake);
   
-  // 表示用：差動駆動の逆算で左右輪速度を求める
-  // velocity = (vL + vR) / 2
-  // angularVel = (vR - vL) / WHEEL_BASE  ← 注意：左旋回でyaw増加、左旋回時 vR > vL
-  // → vL = velocity - angularVel * WHEEL_BASE / 2
-  //   vR = velocity + angularVel * WHEEL_BASE / 2
+  // 入力ゼロの時、わずかな残留速度を完全にゼロにスナップ
+  if (targetVelocity === 0 && Math.abs(chairVelocity) < 0.02) chairVelocity = 0;
+  if (targetAngularVel === 0 && Math.abs(chairAngularVel) < 0.02) chairAngularVel = 0;
+  
+  // 表示用：左右輪速度を逆算
   leftWheelVel = chairVelocity - chairAngularVel * WHEEL_BASE / 2;
   rightWheelVel = chairVelocity + chairAngularVel * WHEEL_BASE / 2;
   
-  fpsYaw += chairAngularVel * dt;
+  // -----------------------------
+  // STEP 5: 運動学積分（Velocity Verlet 法で正確に）
+  // -----------------------------
+  // 物理モデル：
+  //   - 後輪中心が運動の基準点（差動駆動の回転中心）
+  //   - 並進速度ベクトルは「車体の前方向（yaw に依存）」と一致
+  //   - 角速度は yaw を変化させる
   
-  // 並進（後輪中心の新位置）
-  let newRearX = playerWorldX + Math.sin(fpsYaw) * chairVelocity * dt;
-  let newRearZ = playerWorldZ + Math.cos(fpsYaw) * chairVelocity * dt;
+  // ステップ1: yaw を半分進める
+  const halfYaw = fpsYaw + chairAngularVel * dt * 0.5;
   
-  // 衝突判定は幾何中心（後輪中心 + 前方向オフセット）で行う
-  const forwardX = Math.sin(fpsYaw);
-  const forwardZ = Math.cos(fpsYaw);
-  let newCenterX = newRearX + forwardX * REAR_TO_CENTER_OFFSET;
-  let newCenterZ = newRearZ + forwardZ * REAR_TO_CENTER_OFFSET;
+  // ステップ2: 半分進んだ yaw の前方向で並進
+  const forwardX = Math.sin(halfYaw);
+  const forwardZ = Math.cos(halfYaw);
+  let newRearX = playerWorldX + forwardX * chairVelocity * dt;
+  let newRearZ = playerWorldZ + forwardZ * chairVelocity * dt;
   
-  // 体育館内に制限（幾何中心ベース）
+  // ステップ3: 残り半分の yaw を進める
+  fpsYaw = halfYaw + chairAngularVel * dt * 0.5;
+  
+  // -----------------------------
+  // STEP 6: 衝突判定（幾何中心ベース）
+  // -----------------------------
+  const newForwardX = Math.sin(fpsYaw);
+  const newForwardZ = Math.cos(fpsYaw);
+  let newCenterX = newRearX + newForwardX * REAR_TO_CENTER_OFFSET;
+  let newCenterZ = newRearZ + newForwardZ * REAR_TO_CENTER_OFFSET;
+  
+  // 体育館壁との衝突
   newCenterX = Math.max(-HALL_W / 2 + 0.6, Math.min(HALL_W / 2 - 0.6, newCenterX));
   newCenterZ = Math.max(-HALL_L / 2 + 0.6, Math.min(HALL_L / 2 - 0.6, newCenterZ));
   
-  // ===== 他の選手との衝突判定 =====
-  // 車椅子を「衝突半径 R = 0.6m の円（中心は幾何中心）」として扱う
+  // 他選手との衝突
   const COLLISION_R = 0.6;
   for (const p of players) {
     if (p === fpsPlayer) continue;
@@ -2674,122 +2717,353 @@ function updateFPSMovement(dt) {
       p.mesh.position.x = Math.max(-HALL_W / 2 + 0.6, Math.min(HALL_W / 2 - 0.6, p.mesh.position.x));
       p.mesh.position.z = Math.max(-HALL_L / 2 + 0.6, Math.min(HALL_L / 2 - 0.6, p.mesh.position.z));
       chairVelocity *= 0.3;
-      leftWheelVel *= 0.3;
-      rightWheelVel *= 0.3;
     }
   }
   
-  // ===== ボールとの衝突判定（シュート） =====
-  const ballDx = newCenterX - ball.position.x;
-  const ballDz = newCenterZ - ball.position.z;
-  const ballDist = Math.hypot(ballDx, ballDz);
-  const ballMinDist = COLLISION_R + BALL_D / 2;
-  if (ballDist < ballMinDist && ballDist > 0.001) {
-    const moveX = Math.sin(fpsYaw) * chairVelocity;
-    const moveZ = Math.cos(fpsYaw) * chairVelocity;
-    const nx = -ballDx / ballDist;
-    const nz = -ballDz / ballDist;
-    const impactSpeed = -(moveX * nx + moveZ * nz);
-    const kickStrength = 2.5;
-    if (impactSpeed > 0) {
-      ball.userData.vx = -nx * impactSpeed * kickStrength;
-      ball.userData.vz = -nz * impactSpeed * kickStrength;
+  // =====================================================
+  // ボール衝突：長方形（OBB）の正確な面別反発モデル
+  // =====================================================
+  // 車椅子を「長方形」として扱う：
+  //   - 半長（前後）: CHAIR_HALF_L
+  //   - 半幅（左右）: CHAIR_HALF_W
+  // 標準的なCircle-OBB collision detection:
+  //   1. ボール位置を車椅子のローカル座標系に変換
+  //   2. ローカル座標でボール中心を長方形にクランプ → 最近接点
+  //   3. 距離 < ボール半径 なら衝突
+  //   4. 法線 = 最近接点 → ボール中心
+  //   5. 法線方向に反発（前面/側面/後面で反発係数を変える）
+  const ballR = BALL_D / 2;
+  const CHAIR_HALF_L = CHAIR_L / 2 + 0.10;  // 長手方向半長（フットガード含む）
+  const CHAIR_HALF_W = CHAIR_W / 2 + 0.05;  // 横方向半幅
+  
+  // ボールを車椅子ローカル座標系に変換
+  const dxW = ball.position.x - newCenterX;
+  const dzW = ball.position.z - newCenterZ;
+  const localFwd = dxW * newForwardX + dzW * newForwardZ;
+  const localRight = dxW * newForwardZ - dzW * newForwardX;
+  
+  // 最近接点
+  const closestFwd = Math.max(-CHAIR_HALF_L, Math.min(CHAIR_HALF_L, localFwd));
+  const closestRight = Math.max(-CHAIR_HALF_W, Math.min(CHAIR_HALF_W, localRight));
+  
+  const localDx = localRight - closestRight;
+  const localDz = localFwd - closestFwd;
+  const dist2 = localDx * localDx + localDz * localDz;
+  
+  if (dist2 < ballR * ballR && dist2 > 0.000001) {
+    const dist = Math.sqrt(dist2);
+    // 法線決定（重要！）
+    // ボールが「辺の延長線上」にある場合（=角ではない）、その辺の純粋な法線を使う
+    // 角の場合のみ、最近接点→ボール中心の方向を法線とする
+    // 判定：localFwd/localRight のうち一方だけが範囲外
+    let localNormalRight, localNormalFwd;
+    const fwdInRange = Math.abs(localFwd) <= CHAIR_HALF_L;
+    const rightInRange = Math.abs(localRight) <= CHAIR_HALF_W;
+    if (fwdInRange && !rightInRange) {
+      // 横方向だけ外 = 左右の辺に接触（純粋に横方向の法線）
+      localNormalRight = Math.sign(localRight);
+      localNormalFwd = 0;
+    } else if (!fwdInRange && rightInRange) {
+      // 前後方向だけ外 = 前後の辺に接触（純粋に前後方向の法線）
+      localNormalRight = 0;
+      localNormalFwd = Math.sign(localFwd);
     } else {
-      ball.userData.vx += moveX * 0.3;
-      ball.userData.vz += moveZ * 0.3;
+      // 両方外 = 角に接触（最近接点→ボール方向）
+      localNormalRight = localDx / dist;
+      localNormalFwd = localDz / dist;
     }
-    const pushOut = ballMinDist - ballDist + 0.02;
-    ball.position.x -= nx * pushOut;
-    ball.position.z -= nz * pushOut;
+    // ローカル → ワールド
+    const nx = localNormalRight * newForwardZ + localNormalFwd * newForwardX;
+    const nz = -localNormalRight * newForwardX + localNormalFwd * newForwardZ;
+    const tx = -nz;
+    const tz = nx;
+    
+    // 接触点のワールド位置（最近接点を変換）
+    const contactArmX = closestRight * newForwardZ + closestFwd * newForwardX;
+    const contactArmZ = -closestRight * newForwardX + closestFwd * newForwardZ;
+    
+    // ============================================================
+    // 標準剛体衝突公式（電動車椅子サッカー仕様）
+    //   Vcontact = Vchair + (ω × r)
+    //   Vrelative = Vball - Vcontact
+    //   N = 法線（車椅子→ボール、外向き）
+    //   vn = dot(Vrelative, N)
+    //   if vn < 0:  衝突処理
+    //     Vafter_rel = Vrelative - (1+e) * vn * N
+    //     Vball_new = Vafter_rel + Vcontact
+    // ============================================================
+    
+    // 接触点速度 Vcontact = Vchair + ω × r
+    // 並進速度（車椅子は前方向に直進）
+    const vChairX = newForwardX * chairVelocity;
+    const vChairZ = newForwardZ * chairVelocity;
+    // ω × r の水平成分
+    // 本アプリの符号定義：chairAngularVel 負 = 右旋回（ジョイスティック右倒し）
+    // 検証：右前角 r=(0.375, 0, 0.65) が右旋回（ω<0）で右斜め後ろへ動く=(+, -)
+    // 必要な式：vRotX = -ω × rz、vRotZ = ω × rx
+    //   検算：ω=-1, rz=0.65 → vRotX = -(-1)×0.65 = +0.65 ✓
+    //          ω=-1, rx=0.375 → vRotZ = (-1)×0.375 = -0.375 ✓
+    const vRotX = -chairAngularVel * contactArmZ;
+    const vRotZ = chairAngularVel * contactArmX;
+    const vContactX = vChairX + vRotX;
+    const vContactZ = vChairZ + vRotZ;
+    
+    // 相対速度 Vrelative = Vball - Vcontact
+    const vRelX = ball.userData.vx - vContactX;
+    const vRelZ = ball.userData.vz - vContactZ;
+    
+    // 法線方向の相対速度成分 vn = dot(Vrelative, N)
+    const vn = vRelX * nx + vRelZ * nz;
+    
+    // 反発係数（面別）
+    const isFront = Math.abs(closestFwd - CHAIR_HALF_L) < 0.001;
+    const e = isFront ? 0.85 : 0.75;
+    
+    // vn < 0 のときのみ衝突処理（ボールが車椅子に向かっている / 車椅子がボールに突っ込む）
+    if (vn < 0) {
+      // === 法線方向反射 ===
+      // Vafter_rel = Vrelative - (1+e) * vn * N
+      const impulse = -(1 + e) * vn;  // 法線方向のインパルス（正の値）
+      const vAfterRelX = vRelX + impulse * nx;
+      const vAfterRelZ = vRelZ + impulse * nz;
+      
+      // === 接線方向摩擦（クーロン摩擦）===
+      // 接線方向の相対速度
+      const vRelT = vRelX * tx + vRelZ * tz;
+      let vAfterRelTX = vAfterRelX;
+      let vAfterRelTZ = vAfterRelZ;
+      if (Math.abs(vRelT) > 0.001) {
+        const muS = 0.4;  // ゴム同士の摩擦係数
+        const maxFrictionImpulse = muS * impulse;  // 最大摩擦インパルス
+        const frictionMag = Math.min(Math.abs(vRelT), maxFrictionImpulse);
+        const frictionImpulse = -Math.sign(vRelT) * frictionMag;
+        vAfterRelTX = vAfterRelX + tx * frictionImpulse;
+        vAfterRelTZ = vAfterRelZ + tz * frictionImpulse;
+      }
+      
+      // ワールド座標に戻す：Vball_new = Vafter_rel + Vcontact
+      ball.userData.vx = vAfterRelTX + vContactX;
+      ball.userData.vz = vAfterRelTZ + vContactZ;
+      
+      // 衝突情報を2D表示用に保存
+      const contactWorldX = newCenterX + contactArmX;
+      const contactWorldZ = newCenterZ + contactArmZ;
+      lastCollision.active = true;
+      lastCollision.x = contactWorldX;
+      lastCollision.z = contactWorldZ;
+      lastCollision.nx = nx;
+      lastCollision.nz = nz;
+      lastCollision.time = performance.now();
+    }
+    
+    // 衝突後の角速度を新しい速度に同期（純粋転がり）
+    ball.userData.omegaZ = -ball.userData.vx / ballR;
+    ball.userData.omegaX = ball.userData.vz / ballR;
+    
+    // 押し出し：法線方向に「ボール半径 - 現在距離」だけ押す
+    const pushOut = ballR - dist + 0.02;
+    ball.position.x += nx * pushOut;
+    ball.position.z += nz * pushOut;
   }
   
-  // 幾何中心の制限を反映 → 後輪中心位置を更新
-  playerWorldX = newCenterX - forwardX * REAR_TO_CENTER_OFFSET;
-  playerWorldZ = newCenterZ - forwardZ * REAR_TO_CENTER_OFFSET;
+  // 衝突結果を反映：幾何中心 → 後輪中心
+  playerWorldX = newCenterX - newForwardX * REAR_TO_CENTER_OFFSET;
+  playerWorldZ = newCenterZ - newForwardZ * REAR_TO_CENTER_OFFSET;
   
-  // 視点スティック（首振りはほぼ無効化、車椅子と視点を一致）
-  // pitchだけは独立で動かす（上下を見る）
-  fpsPitch -= lookStickInput.y * 0.04;
-  fpsPitch = Math.max(-0.7, Math.min(0.7, fpsPitch));
+  // 視点ピッチ（FPSモード時のみ）
+  if (mode === 'fps') {
+    fpsPitch -= lookStickInput.y * 0.04;
+    fpsPitch = Math.max(-0.7, Math.min(0.7, fpsPitch));
+  }
 }
 
 // FPS情報パネル更新
 function updateFPSInfo() {
-  if (mode !== 'fps' || !fpsPlayer) return;
+  if (mode !== 'fps' && mode !== 'map2d' && mode !== 'followCam') return;
+  const p = fpsPlayer || map2dPlayer || followCamPlayer;
+  if (!p) return;
   const speedKmh = (Math.abs(chairVelocity) * 3.6).toFixed(1);
   const dir = chairVelocity > 0.05 ? '前進' : chairVelocity < -0.05 ? '後退' : '停止';
   const turning = chairAngularVel > 0.05 ? '↺左' : chairAngularVel < -0.05 ? '↻右' : '直進';
-  const ballDx = ball.position.x - playerWorldX;
-  const ballDz = ball.position.z - playerWorldZ;
-  const ballDist = Math.hypot(ballDx, ballDz).toFixed(1);
-  const ballSpeed = Math.hypot(ball.userData.vx, ball.userData.vz);
-  const ballSpdStr = ballSpeed > 0.05 ? `(${(ballSpeed * 3.6).toFixed(1)}km/h)` : '';
   document.getElementById('fpsInfo').innerHTML = 
-    `#${fpsPlayer.number} ${fpsPlayer.name}<br>` +
-    `🏁 ${speedKmh} km/h ${dir} ${turning}<br>` +
-    `⚽ ボール ${ballDist}m ${ballSpdStr}<br>` +
-    `⚙ 速度Lv${speedLevel}`;
+    `<b>#${p.number} ${p.name}</b><br>` +
+    `🏁 ${speedKmh}km/h Lv${speedLevel}`;
 }
 
 // ボール物理（俯瞰でドラッグ離した時に転がる + 車椅子と衝突）
 function updateBallPhysics(dt) {
-  // ===== ボールが動いてる時：車椅子と衝突したら跳ね返る =====
-  const COLLISION_R = 0.6;
+  // ===== ボールが動いてる時：車椅子（操作中以外）とのOBB衝突 =====
   const ballR = BALL_D / 2;
-  const minDist = COLLISION_R + ballR;
+  const CHAIR_HALF_L = CHAIR_L / 2 + 0.10;
+  const CHAIR_HALF_W = CHAIR_W / 2 + 0.05;
   for (const p of players) {
-    const dx = ball.position.x - p.mesh.position.x;
-    const dz = ball.position.z - p.mesh.position.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist < minDist && dist > 0.001) {
-      // ボールを車椅子の外に押し出す
-      const nx = dx / dist;
-      const nz = dz / dist;
-      const overlap = minDist - dist;
-      ball.position.x += nx * overlap;
-      ball.position.z += nz * overlap;
-      // ボールが車椅子に近づく速度成分を反転（反発）
-      const ballSpeedAlongNormal = ball.userData.vx * nx + ball.userData.vz * nz;
-      if (ballSpeedAlongNormal < 0) {
-        // 近づいてる → 反発
-        const restitution = 0.7;
-        ball.userData.vx -= (1 + restitution) * ballSpeedAlongNormal * nx;
-        ball.userData.vz -= (1 + restitution) * ballSpeedAlongNormal * nz;
+    if (p === fpsPlayer) continue;
+    const cx = p.mesh.position.x;
+    const cz = p.mesh.position.z;
+    const yaw = p.mesh.rotation.y;
+    const fwdX = Math.sin(yaw);
+    const fwdZ = Math.cos(yaw);
+    // ローカル座標変換
+    const dxW = ball.position.x - cx;
+    const dzW = ball.position.z - cz;
+    const localFwd = dxW * fwdX + dzW * fwdZ;
+    const localRight = dxW * fwdZ - dzW * fwdX;
+    // 最近接点
+    const closestFwd = Math.max(-CHAIR_HALF_L, Math.min(CHAIR_HALF_L, localFwd));
+    const closestRight = Math.max(-CHAIR_HALF_W, Math.min(CHAIR_HALF_W, localRight));
+    const localDx = localRight - closestRight;
+    const localDz = localFwd - closestFwd;
+    const dist2 = localDx * localDx + localDz * localDz;
+    
+    if (dist2 < ballR * ballR && dist2 > 0.000001) {
+      const dist = Math.sqrt(dist2);
+      const localNormalRight = localDx / dist;
+      const localNormalFwd = localDz / dist;
+      // ワールド法線
+      const nx = localNormalRight * fwdZ + localNormalFwd * fwdX;
+      const nz = -localNormalRight * fwdX + localNormalFwd * fwdZ;
+      // 反発係数
+      const isFront = Math.abs(closestFwd - CHAIR_HALF_L) < 0.001;
+      const e = isFront ? 0.8 : 0.65;
+      // 静止選手 → 法線方向にボール反発
+      const ballVN = ball.userData.vx * nx + ball.userData.vz * nz;
+      if (ballVN < 0) {
+        ball.userData.vx -= (1 + e) * ballVN * nx;
+        ball.userData.vz -= (1 + e) * ballVN * nz;
+        ball.userData.omegaZ = -ball.userData.vx / ballR;
+        ball.userData.omegaX = ball.userData.vz / ballR;
       }
+      // 押し出し
+      const pushOut = ballR - dist + 0.02;
+      ball.position.x += nx * pushOut;
+      ball.position.z += nz * pushOut;
     }
   }
   
-  if (Math.abs(ball.userData.vx) < 0.01 && Math.abs(ball.userData.vz) < 0.01) return;
+  if (Math.abs(ball.userData.vx) < 0.005 && Math.abs(ball.userData.vz) < 0.005 &&
+      Math.abs(ball.userData.omegaX) < 0.1 && Math.abs(ball.userData.omegaZ) < 0.1) {
+    ball.userData.vx = 0;
+    ball.userData.vz = 0;
+    ball.userData.omegaX = 0;
+    ball.userData.omegaZ = 0;
+    return;
+  }
+  
+  // ====================================
+  // 実機準拠のボール物理
+  // ====================================
+  // モデル：
+  //   - ボール質量 m = 1.3 kg（FIPFA公式オーバーサイズ・ゴム製）
+  //   - 半径 r = 0.165 m
+  //   - 慣性モーメント I = (2/5) * m * r^2（中実球の場合）
+  //   - 重力加速度 g = 9.81 m/s^2
+  //   - 動摩擦係数 μ_k = 0.35（ボール表面 × 体育館合板床）
+  //   - 転がり摩擦係数 μ_r = 0.018（実機測定値準拠）
+  //
+  // 状態：
+  //   - 線速度 (vx, vz)
+  //   - 角速度 (omegaX, omegaZ)：Y軸まわりは無視（地面で滑る）
+  //   - ボールが「転がる方向」の角速度は、線速度方向に垂直
+  //     vx > 0 で進む時、Z軸まわりに負の角速度（時計回り）
+  //     vz > 0 で進む時、X軸まわりに正の角速度
+  //   関係式：完全転がり時 omegaZ = -vx/r, omegaX = vz/r
+  
+  const g = 9.81;
+  const ballMass = 1.3;
+  const muK = 0.35;   // 動摩擦
+  const muR = 0.018;  // 転がり摩擦
+  
+  // 現在の線速度
+  const vx = ball.userData.vx;
+  const vz = ball.userData.vz;
+  const speed = Math.hypot(vx, vz);
+  
+  // 接触点速度 = 重心線速度 + 半径 × 角速度
+  // 接触点が地面に対して動いている時 = 滑っている
+  // 滑り速度の成分（ボール底面 vs 床）
+  // X方向の滑り速度 = vx - r * omegaZ  ... ※ 符号注意
+  //   ボールが+X方向に転がる時、omegaZ = -vx/r（時計回り、上から見て）
+  //   omegaZ = -vx/r の時、r * (-omegaZ) = vx → 接触点速度はゼロ（純粋転がり）
+  //   滑り速度 = vx + r * omegaZ（正なら接触点はX+方向に滑っている）
+  // Z方向は逆符号
+  //   ボールが+Z方向に転がる時、omegaX = vz/r
+  //   滑り速度 = vz - r * omegaX
+  const omX = ball.userData.omegaX;
+  const omZ = ball.userData.omegaZ;
+  const slipVX = vx + ballR * omZ;  // 接触点のX速度（プラス=右に滑る）
+  const slipVZ = vz - ballR * omX;  // 接触点のZ速度
+  const slipMag = Math.hypot(slipVX, slipVZ);
+  
+  if (slipMag > 0.05) {
+    // === 滑っている状態：動摩擦が働く ===
+    // 摩擦力 = μ_k * m * g、方向は滑り速度の逆
+    const friction = muK * g;  // 加速度として（m/s^2）
+    const fx = -slipVX / slipMag * friction;
+    const fz = -slipVZ / slipMag * friction;
+    // 重心の線速度変化
+    ball.userData.vx += fx * dt;
+    ball.userData.vz += fz * dt;
+    // 角速度変化：トルク τ = r × F、I*α = τ
+    // I = (2/5) m r^2
+    // 摩擦力は床に水平、ボール底面に作用
+    // X方向の摩擦力 fx → Z軸まわりトルク = -r * fx（プラスのfxは時計回り＝負のomegaZ生成）
+    // 角加速度 = トルク / I = -r * fx / ((2/5) m r^2) = -5 fx / (2 m r)
+    // 注：質量 m は加速度計算で打ち消されるので、最終形は -5/(2r) * fx
+    // でも線速度変化を加速度として扱ったので、fx は既に加速度
+    const angAccelZ = -5 * fx / (2 * ballR);
+    const angAccelX = 5 * fz / (2 * ballR);
+    ball.userData.omegaZ += angAccelZ * dt;
+    ball.userData.omegaX += angAccelX * dt;
+  } else {
+    // === 純粋転がり状態：転がり摩擦のみ（小さい減速） ===
+    // 転がり摩擦による減速 = μ_r * g
+    const rollDecel = muR * g;  // m/s^2
+    if (speed > rollDecel * dt) {
+      const factor = (speed - rollDecel * dt) / speed;
+      ball.userData.vx *= factor;
+      ball.userData.vz *= factor;
+      // 角速度も連動して減速（純粋転がりを維持）
+      ball.userData.omegaZ = -ball.userData.vx / ballR;
+      ball.userData.omegaX = ball.userData.vz / ballR;
+    } else {
+      ball.userData.vx = 0;
+      ball.userData.vz = 0;
+      ball.userData.omegaX = 0;
+      ball.userData.omegaZ = 0;
+    }
+  }
+  
+  // 位置更新
   ball.position.x += ball.userData.vx * dt;
   ball.position.z += ball.userData.vz * dt;
-  // 摩擦（実際のフィールドより少し速く減速）
-  const friction = 1.2;
-  ball.userData.vx -= ball.userData.vx * Math.min(1, friction * dt);
-  ball.userData.vz -= ball.userData.vz * Math.min(1, friction * dt);
-  // 体育館内に制限
+  
+  // ボールの3D回転を角速度で更新
+  ball.rotation.x += ball.userData.omegaX * dt;
+  ball.rotation.z += ball.userData.omegaZ * dt;
+  
+  // 体育館壁での跳ね返り（重いゴムボール反発係数）
+  const wallE = 0.45;
+  let wallBounced = false;
   if (ball.position.x < -HALL_W / 2 + ballR) {
     ball.position.x = -HALL_W / 2 + ballR;
-    ball.userData.vx *= -0.7;
+    if (ball.userData.vx < 0) { ball.userData.vx *= -wallE; wallBounced = true; }
   }
   if (ball.position.x > HALL_W / 2 - ballR) {
     ball.position.x = HALL_W / 2 - ballR;
-    ball.userData.vx *= -0.7;
+    if (ball.userData.vx > 0) { ball.userData.vx *= -wallE; wallBounced = true; }
   }
   if (ball.position.z < -HALL_L / 2 + ballR) {
     ball.position.z = -HALL_L / 2 + ballR;
-    ball.userData.vz *= -0.7;
+    if (ball.userData.vz < 0) { ball.userData.vz *= -wallE; wallBounced = true; }
   }
   if (ball.position.z > HALL_L / 2 - ballR) {
     ball.position.z = HALL_L / 2 - ballR;
-    ball.userData.vz *= -0.7;
+    if (ball.userData.vz > 0) { ball.userData.vz *= -wallE; wallBounced = true; }
   }
-  // 回転（転がりに見える）
-  const speed = Math.hypot(ball.userData.vx, ball.userData.vz);
-  if (speed > 0.01) {
-    const angle = Math.atan2(ball.userData.vx, ball.userData.vz);
-    const r = BALL_D / 2;
-    ball.rotation.x += Math.cos(angle) * speed * dt / r;
-    ball.rotation.z -= Math.sin(angle) * speed * dt / r;
+  // 壁で跳ね返った後の角速度を新しい速度方向に合わせる
+  if (wallBounced) {
+    ball.userData.omegaZ = -ball.userData.vx / ballR;
+    ball.userData.omegaX = ball.userData.vz / ballR;
   }
 }
 
@@ -2801,6 +3075,10 @@ document.getElementById('fpsBtn').addEventListener('click', e => {
 document.getElementById('map2dBtn').addEventListener('click', e => {
   e.stopPropagation();
   if (selectedPlayer) setMap2dView(selectedPlayer);
+});
+document.getElementById('followCamBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  if (selectedPlayer) setFollowCamView(selectedPlayer);
 });
 document.getElementById('map2dBackBtn').addEventListener('click', e => {
   e.stopPropagation();
@@ -2817,7 +3095,8 @@ document.getElementById('cancelBtn').addEventListener('click', e => {
 });
 document.getElementById('fpsBackBtn').addEventListener('click', e => {
   e.stopPropagation();
-  setTopView();
+  if (mode === 'followCam') exitFollowCamView();
+  else setTopView();
 });
 document.getElementById('resetBtn').addEventListener('click', e => {
   e.stopPropagation();
@@ -2828,6 +3107,8 @@ document.getElementById('resetBtn').addEventListener('click', e => {
   ball.position.set(0, BALL_D / 2, 0);
   ball.userData.vx = 0;
   ball.userData.vz = 0;
+  ball.userData.omegaX = 0;
+  ball.userData.omegaZ = 0;
 });
 
 // =================================
@@ -2836,6 +3117,14 @@ document.getElementById('resetBtn').addEventListener('click', e => {
 const map2dCanvas = document.getElementById('map2dCanvas');
 const map2dCtx = map2dCanvas.getContext('2d');
 let map2dPlayer = null;  // 2Dモードで操作中の選手
+// 最後の衝突情報（2Dで法線方向を視覚化）
+let lastCollision = { active: false, x: 0, z: 0, nx: 0, nz: 0, time: 0 };
+let map2dPlayerYaw = 0;
+let map2dPlayerX = 0;
+let map2dPlayerZ = 0;
+let map2dScale = 1;
+let map2dOffX = 0;
+let map2dOffY = 0;
 
 function resize2dCanvas() {
   const w = stage.clientWidth;
@@ -2844,6 +3133,61 @@ function resize2dCanvas() {
   map2dCanvas.height = h;
 }
 window.addEventListener('resize', resize2dCanvas);
+
+// 2Dマップ：選手をタップして切り替え
+function handleMap2dTap(clientX, clientY) {
+  if (mode !== 'map2d') return;
+  const rect = map2dCanvas.getBoundingClientRect();
+  const sx = clientX - rect.left;
+  const sy = clientY - rect.top;
+  // 画面座標 → ワールド座標へ逆変換
+  const wx = (sx - map2dOffX) / map2dScale;
+  const wz = (sy - map2dOffY) / map2dScale;
+  // タップ位置に近い選手を探す
+  let closest = null;
+  let minDist = 1.0;  // 1m以内
+  for (const p of players) {
+    if (p === map2dPlayer) continue;
+    const dx = p.mesh.position.x - wx;
+    const dz = p.mesh.position.z - wz;
+    const dist = Math.hypot(dx, dz);
+    if (dist < minDist) {
+      minDist = dist;
+      closest = p;
+    }
+  }
+  if (closest) {
+    // 現在の選手の位置を確定してから新しい選手に切り替え
+    if (map2dPlayer) {
+      const forwardX = Math.sin(fpsYaw);
+      const forwardZ = Math.cos(fpsYaw);
+      map2dPlayer.mesh.position.x = playerWorldX + forwardX * REAR_TO_CENTER_OFFSET;
+      map2dPlayer.mesh.position.z = playerWorldZ + forwardZ * REAR_TO_CENTER_OFFSET;
+      map2dPlayer.mesh.rotation.y = fpsYaw;
+    }
+    // 新選手に切り替え
+    map2dPlayer = closest;
+    fpsPlayer = closest;
+    fpsYaw = closest.mesh.rotation.y;
+    const forwardX = Math.sin(fpsYaw);
+    const forwardZ = Math.cos(fpsYaw);
+    playerWorldX = closest.mesh.position.x - forwardX * REAR_TO_CENTER_OFFSET;
+    playerWorldZ = closest.mesh.position.z - forwardZ * REAR_TO_CENTER_OFFSET;
+    leftWheelVel = 0; rightWheelVel = 0;
+    chairVelocity = 0; chairAngularVel = 0;
+    joyInput.x = 0; joyInput.y = 0;
+    resetJoyKnob();
+    document.getElementById('modeLabel').textContent = `🗺️ #${closest.number} 2D操作`;
+  }
+}
+map2dCanvas.addEventListener('click', e => {
+  handleMap2dTap(e.clientX, e.clientY);
+});
+map2dCanvas.addEventListener('touchstart', e => {
+  if (e.touches.length > 0) {
+    handleMap2dTap(e.touches[0].clientX, e.touches[0].clientY);
+  }
+}, { passive: true });
 
 function setMap2dView(player) {
   mode = 'map2d';
@@ -2913,255 +3257,321 @@ function updateMap2d(dt) {
   updateFPSMovement(dt);
 }
 
+// ===========================================
+// 俯瞰追従モード：上から見た拡大カメラで操作
+// ===========================================
+let followCamPlayer = null;
+const FOLLOW_CAM_HEIGHT = 6;  // 高さ6m
+const FOLLOW_CAM_LOOK_AHEAD = 0;  // 真上から見下ろす
+
+function setFollowCamView(player) {
+  mode = 'followCam';
+  followCamPlayer = player;
+  fpsPlayer = player;  // 物理計算共用のため
+  fpsYaw = player.mesh.rotation.y;
+  const forwardX = Math.sin(fpsYaw);
+  const forwardZ = Math.cos(fpsYaw);
+  playerWorldX = player.mesh.position.x - forwardX * REAR_TO_CENTER_OFFSET;
+  playerWorldZ = player.mesh.position.z - forwardZ * REAR_TO_CENTER_OFFSET;
+  leftWheelVel = 0; rightWheelVel = 0;
+  chairVelocity = 0; chairAngularVel = 0;
+  joyInput.x = 0; joyInput.y = 0;
+  resetJoyKnob();
+  // UI切替
+  document.getElementById('modeLabel').textContent = `📐 #${player.number} 俯瞰追従`;
+  document.getElementById('modeLabel').classList.remove('fps', 'transition');
+  document.getElementById('topHint').style.display = 'none';
+  document.getElementById('topActions').style.display = 'none';
+  document.getElementById('playerSelectModal').classList.remove('show');
+  document.getElementById('fpsBackBtn').style.display = 'block';
+  // コントローラー表示
+  document.getElementById('wcController').classList.add('show');
+  document.getElementById('fpsInfo').style.display = 'block';
+  // カメラを真上に
+  camera.fov = 55;
+  camera.updateProjectionMatrix();
+  // 全選手のリングを表示（俯瞰なので位置確認用）
+  players.forEach(p => p.mesh.userData.ring.visible = true);
+}
+
+function exitFollowCamView() {
+  mode = 'top';
+  // 俯瞰追従で動かした位置を3Dモデルに反映
+  if (followCamPlayer) {
+    const forwardX = Math.sin(fpsYaw);
+    const forwardZ = Math.cos(fpsYaw);
+    followCamPlayer.mesh.position.x = playerWorldX + forwardX * REAR_TO_CENTER_OFFSET;
+    followCamPlayer.mesh.position.z = playerWorldZ + forwardZ * REAR_TO_CENTER_OFFSET;
+    followCamPlayer.mesh.rotation.y = fpsYaw;
+  }
+  followCamPlayer = null;
+  fpsPlayer = null;
+  document.getElementById('wcController').classList.remove('show');
+  document.getElementById('fpsInfo').style.display = 'none';
+  document.getElementById('fpsBackBtn').style.display = 'none';
+  document.getElementById('modeLabel').textContent = '📐 俯瞰モード';
+  document.getElementById('topHint').style.display = 'block';
+  document.getElementById('topActions').style.display = 'flex';
+  // 俯瞰カメラ復帰
+  TOP_CAM_POS.y = getTopCamHeight();
+  camera.position.copy(TOP_CAM_POS);
+  camera.lookAt(TOP_CAM_LOOK);
+  camera.fov = FOV_TOP;
+  camera.updateProjectionMatrix();
+}
+
+function updateFollowCam(dt) {
+  if (mode !== 'followCam' || !followCamPlayer) return;
+  // 物理計算
+  updateFPSMovement(dt);
+  // カメラを選手の真上に追従（少し前方を見る）
+  const forwardX = Math.sin(fpsYaw);
+  const forwardZ = Math.cos(fpsYaw);
+  const wx = playerWorldX + forwardX * REAR_TO_CENTER_OFFSET;
+  const wz = playerWorldZ + forwardZ * REAR_TO_CENTER_OFFSET;
+  // カメラ位置：選手の真上少し後方
+  camera.position.set(wx - forwardX * 1.5, FOLLOW_CAM_HEIGHT, wz - forwardZ * 1.5);
+  // 注視点：選手の少し前方
+  camera.lookAt(wx + forwardX * 2, 0, wz + forwardZ * 2);
+}
+
 function drawMap2d() {
   if (mode !== 'map2d') return;
   const ctx = map2dCtx;
   const W = map2dCanvas.width;
   const H = map2dCanvas.height;
-  // コート(15m × 28m)を画面いっぱいに表示
-  const margin = 10;
-  const scaleX = (W - margin * 2) / COURT_W;
-  const scaleY = (H - margin * 2) / COURT_L;
-  const scale = Math.min(scaleX, scaleY);
-  const offX = W / 2;
-  const offY = H / 2;
+  
+  // ====================================
+  // 選手追従ズームビュー：
+  // 選手中心の周囲16m四方を画面いっぱいに表示
+  // 選手が動くとカメラ（画面中心）も追従してスクロール
+  // 座標系：ワールド+X=画面右、ワールド+Z=画面下
+  // ====================================
+  const VIEW_SIZE = 16;  // 画面に映る範囲（m）
+  const scale = Math.min(W, H) / VIEW_SIZE;
+  // 自分の選手位置（幾何中心）
+  const fxMe = Math.sin(fpsYaw);
+  const fzMe = Math.cos(fpsYaw);
+  const meX = playerWorldX + fxMe * REAR_TO_CENTER_OFFSET;
+  const meZ = playerWorldZ + fzMe * REAR_TO_CENTER_OFFSET;
+  // 画面中心 = 選手位置（追従カメラ）
+  // ただし、コート外を映しすぎないよう少し制限（画面の端が見えていい範囲まで）
+  const offX = W / 2 - meX * scale;
+  const offY = H / 2 - meZ * scale;
+  // クリック判定用に保存
+  map2dScale = scale;
+  map2dOffX = offX;
+  map2dOffY = offY;
+  // ワールド座標 → 画面座標
   function w2sx(wx) { return offX + wx * scale; }
-  function w2sy(wz) { return offY - wz * scale; }
-  // 背景：体育館の床（コート外）
+  function w2sy(wz) { return offY + wz * scale; }
+  // 背景：体育館の床
   ctx.fillStyle = '#3a3024';
   ctx.fillRect(0, 0, W, H);
-  // コート（緑）
+  
+  // ===== コート =====
+  const hw = COURT_W / 2;
+  const hl = COURT_L / 2;
   ctx.fillStyle = '#2d5a3d';
-  const courtX = w2sx(-COURT_W / 2);
-  const courtY = w2sy(COURT_L / 2);
-  const courtW = COURT_W * scale;
-  const courtH = COURT_L * scale;
-  ctx.fillRect(courtX, courtY, courtW, courtH);
-  // コートライン（白）
+  // fillRectは左上隅基準。新座標系では-hl(北)が画面上、+hl(南)が画面下
+  ctx.fillRect(w2sx(-hw), w2sy(-hl), COURT_W * scale, COURT_L * scale);
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = 2;
-  ctx.strokeRect(courtX, courtY, courtW, courtH);
+  ctx.strokeRect(w2sx(-hw), w2sy(-hl), COURT_W * scale, COURT_L * scale);
   // センターライン
   ctx.beginPath();
-  ctx.moveTo(courtX, offY);
-  ctx.lineTo(courtX + courtW, offY);
+  ctx.moveTo(w2sx(-hw), offY);
+  ctx.lineTo(w2sx(hw), offY);
   ctx.stroke();
   // センターサークル
   ctx.beginPath();
   ctx.arc(offX, offY, 1.5 * scale, 0, Math.PI * 2);
   ctx.stroke();
-  // ゴールエリア
-  const gaW = 8 * scale;
-  const gaH = 5 * scale;
-  ctx.strokeRect(offX - gaW/2, w2sy(COURT_L/2), gaW, gaH);
-  ctx.strokeRect(offX - gaW/2, w2sy(-COURT_L/2 + 5), gaW, gaH);
-  // ゴール
-  ctx.fillStyle = '#ffd700';
-  ctx.fillRect(offX - (GOAL_W / 2) * scale, w2sy(-COURT_L/2) - 6, GOAL_W * scale, 6);
-  ctx.fillStyle = '#4a9eff';
-  ctx.fillRect(offX - (GOAL_W / 2) * scale, w2sy(COURT_L/2), GOAL_W * scale, 6);
+  // ゴール（北 -hl = 画面上、南 +hl = 画面下）
+  ctx.fillStyle = '#ffd700';  // 北ゴール（金）
+  ctx.fillRect(w2sx(-GOAL_W/2), w2sy(-hl) - 2, GOAL_W * scale, 6);
+  ctx.fillStyle = '#4a9eff';  // 南ゴール（青）
+  ctx.fillRect(w2sx(-GOAL_W/2), w2sy(hl) - 4, GOAL_W * scale, 6);
   
-  // 選手描画
+  // ===== 選手描画 =====
   for (const p of players) {
-    const px = w2sx(p.mesh.position.x);
-    const py = w2sy(p.mesh.position.z);
     const isMe = (p === map2dPlayer);
-    // 自分の場合は、現在の位置（後輪中心+前方オフセット）を使う
-    let drawX = px, drawY = py;
-    let drawYaw = p.mesh.rotation.y;
+    let wx, wz, worldYaw;
     if (isMe) {
-      const fx = Math.sin(fpsYaw);
-      const fz = Math.cos(fpsYaw);
-      const wx = playerWorldX + fx * REAR_TO_CENTER_OFFSET;
-      const wz = playerWorldZ + fz * REAR_TO_CENTER_OFFSET;
-      drawX = w2sx(wx);
-      drawY = w2sy(wz);
-      drawYaw = fpsYaw;
+      wx = meX;
+      wz = meZ;
+      worldYaw = fpsYaw;
+    } else {
+      wx = p.mesh.position.x;
+      wz = p.mesh.position.z;
+      worldYaw = p.mesh.rotation.y;
     }
-    drawChair2d(ctx, drawX, drawY, drawYaw, p.team, p.number, isMe, scale);
+    const sx = w2sx(wx);
+    const sy = w2sy(wz);
+    // 画面上の前方ベクトル
+    //   ワールド前方 = (sin worldYaw, cos worldYaw)
+    //   画面では: x方向はそのまま、z方向は反転（w2syが -wz * scale なので）
+    //   → 画面上の前方 = (sin worldYaw, -cos worldYaw)
+    // ctx.rotate(angle) で「ローカル -Y方向（画面上）」を「画面上の前方方向」に向けたい
+    // ローカル(-Y) を時計回りに angle 回転 → (sin angle, -cos angle)
+    // これが画面上の前方 (sin worldYaw, -cos worldYaw) と等しい:
+    // ワールド座標系の理解:
+    //   - worldYaw = 0 → 物理上は +Z 方向を向く
+    //   - 2Dマップでは +Z は画面下 (w2sy(wz) = offY - wz*scale)
+    //   - つまり worldYaw=0 の車体は画面下を向くべき
+    // Canvas2D:
+    //   - ctx.rotate(0) でローカル -Y (画面上) が車体の前
+    //   - ctx.rotate(π) で車体は画面下を向く
+    // つまり worldYaw=0 → screenAngle=π
+    // また、worldYaw=π → screenAngle=0（画面上向き）
+    // worldYaw=π/2 → screenAngle=π/2（東向き=画面右）
+    // → screenAngle = π - worldYaw
+    const screenAngle = Math.PI - worldYaw;
+    drawChair2dFixed(ctx, sx, sy, screenAngle, p.team, p.number, isMe, scale);
   }
   
-  // 自分の回転中心マーカーを「後輪中心の絶対位置」に描画（旋回時に動かない）
-  if (map2dPlayer) {
-    const rearScreenX = w2sx(playerWorldX);
-    const rearScreenY = w2sy(playerWorldZ);
-    // 大きめの黄色いマーカー（十字とリング）
-    ctx.fillStyle = '#ff0';
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(rearScreenX, rearScreenY, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // 十字線（回転軸を強調）
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(rearScreenX - 12, rearScreenY);
-    ctx.lineTo(rearScreenX + 12, rearScreenY);
-    ctx.moveTo(rearScreenX, rearScreenY - 12);
-    ctx.lineTo(rearScreenX, rearScreenY + 12);
-    ctx.stroke();
-    // ラベル
-    ctx.fillStyle = '#ff0';
-    ctx.font = 'bold 10px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('回転軸', rearScreenX + 14, rearScreenY);
-  }
-  // ボール
+  // ===== ボール（実物大、衝突判定と一致）=====
   const bx = w2sx(ball.position.x);
   const by = w2sy(ball.position.z);
-  // ボール影
+  const ballScreenR = (BALL_D / 2) * scale;
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.beginPath();
-  ctx.arc(bx + 2, by + 2, (BALL_D / 2) * scale * 1.5, 0, Math.PI * 2);
+  ctx.arc(bx + 2, by + 2, ballScreenR, 0, Math.PI * 2);
   ctx.fill();
-  // ボール本体（見やすさ重視で1.5倍）
   ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.arc(bx, by, (BALL_D / 2) * scale * 1.5, 0, Math.PI * 2);
+  ctx.arc(bx, by, ballScreenR, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 2;
   ctx.stroke();
-  // ボールの黒点（サッカーボール感）
+  // 黒模様（サッカーボールらしく）
   ctx.fillStyle = '#000';
-  const dotR = (BALL_D / 2) * scale * 0.3;
   ctx.beginPath();
-  ctx.arc(bx - dotR * 0.5, by - dotR * 0.5, dotR * 0.5, 0, Math.PI * 2);
+  ctx.arc(bx, by, ballScreenR * 0.25, 0, Math.PI * 2);
   ctx.fill();
-  ctx.beginPath();
-  ctx.arc(bx + dotR * 0.7, by + dotR * 0.3, dotR * 0.4, 0, Math.PI * 2);
-  ctx.fill();
-  // ボール速度ベクトル
-  const bvSpeed = Math.hypot(ball.userData.vx, ball.userData.vz);
-  if (bvSpeed > 0.1) {
-    ctx.strokeStyle = '#ff0';
-    ctx.lineWidth = 3;
+  
+  // ===== 衝突法線の可視化（1秒間表示）=====
+  if (lastCollision.active && performance.now() - lastCollision.time < 1500) {
+    const cpx = w2sx(lastCollision.x);
+    const cpy = w2sy(lastCollision.z);
+    // 法線方向 → 画面方向（座標系：+Z=画面下）
+    const ndScreenX = lastCollision.nx;
+    const ndScreenY = lastCollision.nz;  // +Z=画面下 なのでそのまま
+    // 接触点に丸
+    ctx.fillStyle = '#ff0';
     ctx.beginPath();
-    ctx.moveTo(bx, by);
-    ctx.lineTo(bx + ball.userData.vx * scale * 0.5, by - ball.userData.vz * scale * 0.5);
+    ctx.arc(cpx, cpy, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#f80';
+    ctx.lineWidth = 2;
     ctx.stroke();
+    // 法線矢印（ボールが弾かれた方向）
+    const arrowLen = 50;
+    ctx.strokeStyle = '#ff0';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cpx, cpy);
+    ctx.lineTo(cpx + ndScreenX * arrowLen, cpy + ndScreenY * arrowLen);
+    ctx.stroke();
+    // 矢印頭
+    const ah = Math.atan2(ndScreenY, ndScreenX);
+    const tipX = cpx + ndScreenX * arrowLen;
+    const tipY = cpy + ndScreenY * arrowLen;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(tipX - 12 * Math.cos(ah - 0.5), tipY - 12 * Math.sin(ah - 0.5));
+    ctx.lineTo(tipX - 12 * Math.cos(ah + 0.5), tipY - 12 * Math.sin(ah + 0.5));
+    ctx.closePath();
+    ctx.fillStyle = '#ff0';
+    ctx.fill();
+  } else if (lastCollision.active) {
+    lastCollision.active = false;
   }
 }
 
-function drawChair2d(ctx, px, py, yaw, team, number, isMe, scale) {
-  // 2D画面の座標系：画面上=+Y=世界の+Z（北、攻撃方向）
-  // ワールドの回転 (yaw) は反時計回り正、画面の回転も標準で反時計回り正なので
-  // ctx.rotate(yaw) でそのまま使える（Y軸反転していないため）
-  // ただし、ワールドのyaw=0で+Z方向を向くが、画面のctx.rotate(0)では+X(右)方向が"前"になる。
-  // つまり、ワールドのyaw=0 を画面の「上方向(-Y)」に対応させるため、π/2 を引く。
-  // → ctx.rotate(-yaw - Math.PI/2)
-  const drawAngle = -yaw - Math.PI / 2;
+// 2D固定俯瞰ビュー用の車椅子描画
+// screenAngle: 画面上で車体の前方が向く角度（Canvas2D時計回り正、0=画面上(-Y)）
+function drawChair2dFixed(ctx, px, py, screenAngle, team, number, isMe, scale) {
   ctx.save();
   ctx.translate(px, py);
-  ctx.rotate(drawAngle);
-  // ローカル座標：+X方向が前方
-  // 車体サイズ（見やすく1.4倍）
-  const cl = CHAIR_L * scale * 1.4;  // 全長（+X方向）
-  const cw = CHAIR_W * scale * 1.4;  // 幅
+  ctx.rotate(screenAngle);
+  // ローカル：+X=右、+Y=下、車体の前方は -Y 方向
+  // 衝突判定と完全一致させる（CHAIR_HALF_L = CHAIR_L/2 + 0.10, CHAIR_HALF_W = CHAIR_W/2 + 0.05）
+  // 描画も実際の衝突範囲と同じサイズで
+  const cl = (CHAIR_L + 0.20) * scale;  // 衝突範囲＝CHAIR_HALF_L * 2
+  const cw = (CHAIR_W + 0.10) * scale;  // 衝突範囲＝CHAIR_HALF_W * 2
   
   // 影
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fillRect(-cl/2 + 2, -cw/2 + 2, cl, cw);
-  // メインフレーム（長方形）
+  ctx.fillRect(-cw/2 + 2, -cl/2 + 2, cw, cl);
+  // メインフレーム
   ctx.fillStyle = team === 'blue' ? '#1e5cb8' : '#c43850';
-  ctx.fillRect(-cl/2, -cw/2, cl, cw);
+  ctx.fillRect(-cw/2, -cl/2, cw, cl);
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = 1.5;
-  ctx.strokeRect(-cl/2, -cw/2, cl, cw);
+  ctx.strokeRect(-cw/2, -cl/2, cw, cl);
   
-  // 番号（中央）
+  // 前方フットガード（前端 = ローカル -Y側）
+  ctx.fillStyle = '#000';
+  ctx.fillRect(-cw/2 - 3, -cl/2 - 4, cw + 6, 5);
+  
+  // 後輪（ローカル +Y側、後方）
+  ctx.fillStyle = '#000';
+  const rearY = cl * 0.27;
+  ctx.fillRect(-cw/2 - 4, rearY - 5, 4, 10);
+  ctx.fillRect(cw/2, rearY - 5, 4, 10);
+  
+  // 番号
+  ctx.save();
+  ctx.rotate(-screenAngle);
   ctx.fillStyle = '#fff';
   ctx.font = `bold ${Math.max(12, cw * 0.55)}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  // 画面に対して正しく番号が読めるよう、回転を打ち消す
-  ctx.save();
-  ctx.rotate(-drawAngle);
   ctx.fillText(number, 0, 0);
   ctx.restore();
   
-  // 前方フットガード（前端の黒バー）
-  ctx.fillStyle = '#000';
-  ctx.fillRect(cl/2 - 3, -cw/2 - 2, 5, cw + 4);
-  
-  // 後輪（車体後方の左右、回転軸の位置）
-  // 後輪は回転軸（後輪中心=モデル-Z=ローカル-X側）
-  const rearX = -cl * 0.27;  // モデル後輪位置
-  ctx.fillStyle = '#000';
-  ctx.fillRect(rearX - 5, -cw/2 - 4, 10, 4);
-  ctx.fillRect(rearX - 5, cw/2, 10, 4);
-  
-  // 前輪（キャスター、前方の左右）
-  const frontX = cl * 0.32;
-  ctx.fillStyle = '#666';
-  ctx.fillRect(frontX - 3, -cw/2 - 3, 6, 3);
-  ctx.fillRect(frontX - 3, cw/2, 6, 3);
-  
-  // 自分マーク
+  // 自分マーク：当たり判定範囲を明示（オレンジ点線）
   if (isMe) {
-    // 金色の枠
+    // 衝突判定範囲（CHAIR_HALF_W * 2、CHAIR_HALF_L * 2）を明示
+    ctx.strokeStyle = '#ff6600';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(-cw/2, -cl/2, cw, cl);
+    ctx.setLineDash([]);
+    // 金色の選択枠（やや外側）
     ctx.strokeStyle = '#ffd700';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(-cl/2 - 4, -cw/2 - 6, cl + 8, cw + 12);
-    
-    // 進行方向矢印（前方=+X）
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-cw/2 - 4, -cl/2 - 4, cw + 8, cl + 8);
+    // 前方矢印
     ctx.strokeStyle = '#0ff';
     ctx.fillStyle = '#0ff';
-    ctx.lineWidth = 4;
-    const arrowStart = cl/2 + 8;
-    const arrowEnd = cl/2 + 28;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(arrowStart, 0);
-    ctx.lineTo(arrowEnd, 0);
+    ctx.moveTo(0, -cl/2 - 8);
+    ctx.lineTo(0, -cl/2 - 22);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(arrowEnd + 4, 0);
-    ctx.lineTo(arrowEnd - 6, -7);
-    ctx.lineTo(arrowEnd - 6, 7);
+    ctx.moveTo(0, -cl/2 - 25);
+    ctx.lineTo(-6, -cl/2 - 16);
+    ctx.lineTo(6, -cl/2 - 16);
     ctx.closePath();
     ctx.fill();
-    
-    // 回転中心は外側で描画（playerWorldX/Zの絶対位置に固定）
   }
-  ctx.restore();
   
-  // 左右輪速度を画面に固定表示（回転しない）
-  if (isMe) {
-    ctx.fillStyle = 'rgba(0,0,0,0.8)';
-    ctx.fillRect(px - 50, py + 35, 100, 30);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 11px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const lw = leftWheelVel.toFixed(2);
-    const rw = rightWheelVel.toFixed(2);
-    ctx.fillText(`L:${lw} R:${rw}`, px, py + 44);
-    const turning = chairAngularVel > 0.05 ? '↺ 左旋回' : chairAngularVel < -0.05 ? '↻ 右旋回' : '直進';
-    ctx.fillText(turning, px, py + 58);
-  }
+  ctx.restore();
 }
 
-// 2DマップのFPS情報用に updateFPSInfo を共用化
+// 2DマップのFPS情報用に updateFPSInfo を共用化（デバッグ詳細版）
 const _originalUpdateFPSInfo = updateFPSInfo;
 updateFPSInfo = function() {
-  if ((mode !== 'fps' && mode !== 'map2d') || (!fpsPlayer && !map2dPlayer)) return;
-  const p = fpsPlayer || map2dPlayer;
+  if ((mode !== 'fps' && mode !== 'map2d' && mode !== 'followCam') || (!fpsPlayer && !map2dPlayer && !followCamPlayer)) return;
+  const p = fpsPlayer || map2dPlayer || followCamPlayer;
   const speedKmh = (Math.abs(chairVelocity) * 3.6).toFixed(1);
-  const dir = chairVelocity > 0.05 ? '前進' : chairVelocity < -0.05 ? '後退' : '停止';
-  const turning = chairAngularVel > 0.05 ? '↺左' : chairAngularVel < -0.05 ? '↻右' : '直進';
-  const ballDx = ball.position.x - playerWorldX;
-  const ballDz = ball.position.z - playerWorldZ;
-  const ballDist = Math.hypot(ballDx, ballDz).toFixed(1);
-  const ballSpeed = Math.hypot(ball.userData.vx, ball.userData.vz);
-  const ballSpdStr = ballSpeed > 0.05 ? `(${(ballSpeed * 3.6).toFixed(1)}km/h)` : '';
   document.getElementById('fpsInfo').innerHTML = 
-    `#${p.number} ${p.name}<br>` +
-    `🏁 ${speedKmh} km/h ${dir} ${turning}<br>` +
-    `⚽ ボール ${ballDist}m ${ballSpdStr}<br>` +
-    `⚙ 速度Lv${speedLevel}`;
+    `<b>#${p.number} ${p.name}</b><br>` +
+    `🏁 ${speedKmh}km/h Lv${speedLevel}`;
 };
 
 // ループ
@@ -3180,6 +3590,9 @@ function animate() {
     updateFPSInfo();
   } else if (mode === 'map2d') {
     updateMap2d(dt);
+    updateFPSInfo();
+  } else if (mode === 'followCam') {
+    updateFollowCam(dt);
     updateFPSInfo();
   }
   
@@ -3200,5 +3613,6 @@ camera.lookAt(TOP_CAM_LOOK);
 players.forEach(p => p.mesh.userData.ring.visible = true);
 animate();
 </script>
+<div id="appVer" style="position:fixed;right:6px;bottom:4px;z-index:99999;pointer-events:none;font:11px/1 monospace;color:#fff;background:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px">v13.5 · 2026-06-18</div>
 </body>
 </html>
