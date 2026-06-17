@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v2 - スティック/FPS/体育館</title>
+<title>SFC Delteas 戦術ビューア 3D v3 - 3視点/運営スタッフ配置</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
@@ -46,7 +46,7 @@
 </div>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v2 · 2026-06-18</div>
+<div id="ver">3D v3 · 2026-06-18</div>
 
 <script type="importmap">
 { "imports": { "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js" } }
@@ -85,8 +85,34 @@ gymFloor.rotation.x=-Math.PI/2; gymFloor.position.y=-0.02; scene.add(gymFloor);
 const wallMat=new THREE.MeshStandardMaterial({color:0x3a3f4a,roughness:1});
 function wall(w,d,x,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,3,d),wallMat); m.position.set(x,1.5,z); scene.add(m); }
 wall(HALLX,0.3,0,-HALLZ/2); wall(HALLX,0.3,0,HALLZ/2); wall(0.3,HALLZ,-HALLX/2,0); wall(0.3,HALLZ,HALLX/2,0);
-// スコアラーテーブル（雰囲気）
-const tbl=new THREE.Mesh(new THREE.BoxGeometry(4,0.75,1),new THREE.MeshStandardMaterial({color:0x5a4633})); tbl.position.set(0,0.38,-Wd/2-2.2); scene.add(tbl);
+// ===== 試合運営の人・備品（元3D版と同じ配置イメージ）=====
+function person(color,x,z,ry){ const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.55,0.3), new THREE.MeshStandardMaterial({color,roughness:.8})); body.position.y=0.7; g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.15,12,10), new THREE.MeshStandardMaterial({color:0xf0c8a0})); head.position.y=1.06; g.add(head);
+  g.position.set(x,0,z); if(ry)g.rotation.y=ry; scene.add(g); return g; }
+function chairProp(color,x,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(2*HX,0.45,2*HY), new THREE.MeshStandardMaterial({color,roughness:.7})); m.position.set(x,0.32,z); scene.add(m); }
+function timerTex(){ const c=document.createElement('canvas'); c.width=256;c.height=96; const x=c.getContext('2d'); x.fillStyle='#000';x.fillRect(0,0,256,96); x.fillStyle='#19ff5a';x.font='bold 58px monospace';x.textAlign='center';x.textBaseline='middle';x.fillText('20:00',128,52); return new THREE.CanvasTexture(c); }
+(function buildArena(){
+  const OFFZ=-Wd/2-2;  // 記録席・ベンチ側
+  // オフィシャルテーブル＋記録用紙
+  const table=new THREE.Mesh(new THREE.BoxGeometry(3,0.74,1), new THREE.MeshStandardMaterial({color:0x4a3520})); table.position.set(0,0.37,OFFZ-0.3); scene.add(table);
+  // デジタイマー（自立スタンド・コートに向く）
+  const post=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.0,0.1), new THREE.MeshStandardMaterial({color:0x333})); post.position.set(2.6,0.5,OFFZ-0.2); scene.add(post);
+  const tboard=new THREE.Mesh(new THREE.PlaneGeometry(1.4,0.55), new THREE.MeshBasicMaterial({map:timerTex(),side:THREE.DoubleSide})); tboard.position.set(2.6,1.15,OFFZ-0.15); scene.add(tboard);
+  // 記録係2人（白）
+  person(0xffffff,-0.6,OFFZ-0.9); person(0xffffff,0.6,OFFZ-0.9);
+  // ベンチ（青=+X側 / 赤=-X側）：コーチ＋控え2人＋控え車椅子2台
+  function bench(cx,teamCol){ const b=new THREE.Mesh(new THREE.BoxGeometry(4,0.1,0.5), new THREE.MeshStandardMaterial({color:0x6b4423})); b.position.set(cx,0.42,OFFZ-0.1); scene.add(b);
+    person(0x222222,cx-1.5,OFFZ-0.3); person(teamCol,cx-0.3,OFFZ-0.3); person(teamCol,cx+0.9,OFFZ-0.3);
+    chairProp(teamCol,cx+0.2,OFFZ+1.0); chairProp(teamCol,cx+1.6,OFFZ+1.0); }
+  bench(7,0x2f6fd6); bench(-7,0xd24a45);
+  // 審判：主審＋副審2（黄）コート反対側、コートを向く
+  person(0xffd000,0,Wd/2+1.4,Math.PI); person(0xffd000,-9,Wd/2+1.2,Math.PI); person(0xffd000,9,Wd/2+1.2,Math.PI);
+  // 観客（両ロングサイドの外周に簡易配置）
+  const cols=[0x884444,0x446688,0x668844,0x886644,0x555577,0x775555];
+  function crowd(z,rows,dir){ for(let r=0;r<rows;r++)for(let i=-10;i<=10;i+=2){ const c=cols[(Math.abs(Math.round(i))+r)%cols.length]; person(c, i+(r%2?1:0), z+dir*r*1.2, 0); } }
+  crowd(OFFZ-3,2,-1); crowd(Wd/2+3,2,1);
+})();
 
 // コート床（線をテクスチャで）
 function courtTexture(){ const c=document.createElement('canvas'); const S=40; c.width=L*S; c.height=Wd*S; const x=c.getContext('2d');
@@ -245,11 +271,12 @@ function syncMeshes(){
 let view='over', orient='land';
 function updateCamera(){
   if(view==='fps'&&ctrlBlue){ const c=ctrlBlue, fx=Math.cos(c.th), fy=Math.sin(c.th);
-    camera.position.set(mX(c.x)-fx*0.1,1.35,mZ(c.y)-fy*0.1);
-    camera.lookAt(mX(c.x)+fx*6,1.15,mZ(c.y)+fy*6); camera.up.set(0,1,0);
-  } else { const az=orient==='land'?0:Math.PI/2, r=21, h=24;
-    camera.position.set(Math.sin(az)*r,h,Math.cos(az)*r+(orient==='land'?3:0));
-    camera.lookAt(0,0,0); camera.up.set(0,1,0); }
+    camera.up.set(0,1,0); camera.position.set(mX(c.x)-fx*0.1,1.35,mZ(c.y)-fy*0.1);
+    camera.lookAt(mX(c.x)+fx*6,1.15,mZ(c.y)+fy*6);
+  } else if(view==='top'){ camera.up.set(orient==='land'?0:-1,0,orient==='land'?-1:0);
+    camera.position.set(0,34,0.001); camera.lookAt(0,0,0);
+  } else { const az=orient==='land'?0:Math.PI/2, r=21, h=24; camera.up.set(0,1,0);
+    camera.position.set(Math.sin(az)*r,h,Math.cos(az)*r+(orient==='land'?3:0)); camera.lookAt(0,0,0); }
 }
 function resize(){ const w=cv.clientWidth,h=cv.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
 
@@ -274,7 +301,10 @@ document.querySelectorAll('#modes .btn').forEach(b=>b.addEventListener('click',(
 document.getElementById('play').addEventListener('click',function(){paused=!paused;this.textContent=paused?'再生':'一時停止';});
 document.getElementById('reset').addEventListener('click',()=>place());
 document.getElementById('orient').addEventListener('click',function(){orient=orient==='land'?'port':'land';this.textContent=orient==='land'?'縦型にする':'横型にする';});
-document.getElementById('view').addEventListener('click',function(){view=view==='over'?'fps':'over';this.textContent='視点: '+(view==='over'?'俯瞰':'1人称');});
+const VIEWS=['top','over','fps'], VLAB={top:'真上',over:'斜め',fps:'1人称'};
+function setViewLabel(){ document.getElementById('view').textContent='視点: '+VLAB[view]; }
+document.getElementById('view').addEventListener('click',function(){ view=VIEWS[(VIEWS.indexOf(view)+1)%VIEWS.length]; setViewLabel(); });
+setViewLabel();
 document.getElementById('lock').addEventListener('click',function(){lockSix=!lockSix;this.textContent='操作: '+(lockSix?'#6固定':'自動');});
 
 // 戦術ドラッグ（停止中・俯瞰のみ）
