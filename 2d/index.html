@@ -76,11 +76,12 @@
   function reset(){ P=chair(GL+120,MIDY,0,'#2d8a3d','#1b5a28'); A=chair(GR-120,MIDY,Math.PI,'#d24a45','#8a2723'); ball={x:W/2,y:MIDY,vx:0,vy:0}; sA=0;sB=0; lastHit=null; }
   reset();
   function nA(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
-  function upd(c,dt,thr,turn){
-    if(thr)c.spd+=Math.sign(thr)*ACC*dt; else c.spd-=Math.sign(c.spd)*Math.min(Math.abs(c.spd),DEC*dt);
-    c.spd=Math.max(-MAXS*0.6,Math.min(MAXS,c.spd)); c.spd*=0.998;
-    if(turn)c.om+=Math.sign(turn)*AAC*dt; else c.om-=Math.sign(c.om)*Math.min(Math.abs(c.om),ADC*dt);
-    c.om=Math.max(-MO,Math.min(MO,c.om)); c.om*=0.99; c.th+=c.om*dt;
+  function approach(cur,tgt,acc,brk,dt){const d=tgt-cur;const r=(Math.abs(tgt)<0.001||cur*tgt<0)?brk:acc;const mc=r*dt;return Math.abs(d)<=mc?tgt:cur+Math.sign(d)*mc;}
+  function upd(c,dt,thr,turn){ // 3D版と同じ：倒し量に比例した目標値へなめらかに加減速
+    const tv=Math.max(-1,Math.min(1,thr))*MAXS, ta=Math.max(-1,Math.min(1,turn))*MO;
+    c.spd=approach(c.spd,tv,ACC,DEC,dt); c.om=approach(c.om,ta,AAC,ADC,dt);
+    if(Math.abs(tv)<0.001&&Math.abs(c.spd)<2)c.spd=0; if(Math.abs(ta)<0.001&&Math.abs(c.om)<0.03)c.om=0;
+    c.th+=c.om*dt;
     const fx=Math.cos(c.th),fy=Math.sin(c.th); c.x+=fx*c.spd*dt; c.y+=fy*c.spd*dt; c.vx=fx*c.spd; c.vy=fy*c.spd;
     if(c.x<GL+EDGE){c.x=GL+EDGE;if(c.spd*fx<0)c.spd*=0.3;} if(c.x>GR-EDGE){c.x=GR-EDGE;if(c.spd*fx>0)c.spd*=0.3;}
     if(c.y<GT+EDGE){c.y=GT+EDGE;if(c.spd*fy<0)c.spd*=0.3;} if(c.y>GB-EDGE){c.y=GB-EDGE;if(c.spd*fy>0)c.spd*=0.3;}

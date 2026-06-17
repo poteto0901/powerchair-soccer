@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v9 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
+<title>SFC Delteas 戦術ビューア 3D v10 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
@@ -74,12 +74,12 @@
 </div>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v9 · 2026-06-18</div>
+<div id="ver">3D v10 · 2026-06-18</div>
 <div id="title">
   <div class="emblem">D</div>
   <div class="tt-sub">POWERCHAIR FOOTBALL</div>
   <div class="tt-main">SFC Delteas <span>戦術ビューア</span></div>
-  <div class="tt-ver">3D v9 ・ 電動車椅子サッカー</div>
+  <div class="tt-ver">3D v10 ・ 電動車椅子サッカー</div>
   <button id="startBtn">スタート</button>
   <a href="../2d/" style="margin-top:14px;color:#6fce7e;font-size:14px;text-decoration:none;border:1px solid rgba(111,206,126,.5);border-radius:9px;padding:9px 18px;">🕹 シンプル2D版で遊ぶ →</a>
   <div class="tt-note">クリック／タップで開始（音が有効になります）</div>
@@ -103,7 +103,7 @@ const PB_DEPTH=4, PB_HALF=4.5;            // ペナルティ(ゴール)エリア
 const HX=0.65, HY=0.5, GUARD=0.12, BR=0.1625, REAR=0.35, EDGE=Math.hypot(HX+GUARD,HY); // REAR=後輪軸が幾何中心より後方=旋回ピボット
 // 車椅子が走れる範囲＝体育館全域（壁の内側）
 const RX0=L/2-HALLX/2+0.8, RX1=L/2+HALLX/2-0.8, RY0=Wd/2-HALLZ/2+0.8, RY1=Wd/2+HALLZ/2-0.8;
-let SPEED=2.78; const ACC=4, DEC=8, MO=3.8, AAC=16, ADC=16, BDEC=0.5, E=0.5, GRIP=0.4;  // 直進は規定10km/h(2.78m/s)上限、旋回は速く(スピンキック強化)
+let SPEED=2.9; const ACC=8, DEC=10, MO=5.0, AAC=24, ADC=20, BDEC=0.5, E=0.5, GRIP=0.4;  // 10km/h相当＋加速/回転を上げてキビキビ・スピンキック強化
 
 const ROSTER={
   blue:[{n:'1',name:'デルGK',gk:true},{n:'6',name:'中村(K)'},{n:'7',name:'デル-7'},{n:'10',name:'デル-10'}],
@@ -226,10 +226,10 @@ let practiceI=0, practiceMade=0, feedTimer=0;
 function placeBallPreset(){
   if(mode&&mode.ptype==='pass'){ const att=cs.find(c=>c.tm==='blue');
     const acx=att?att.x+Math.cos(att.th)*REAR:L*0.78, acy=att?att.y+Math.sin(att.th)*REAR:Wd/2;
-    const off=[-3,-1.2,0.8,2.6,-2,1.6][practiceI%6]; practiceI++;                 // 毎回ちょっと横へずらす→一定位置にしない
-    const ox=acx+off, oy=Math.max(1.4, acy-4.2), tx=acx+off*0.35, ty=acy;
-    const dx=tx-ox, dy=ty-oy, d=Math.hypot(dx,dy)||1, sp=2.2;
-    ball.x=ox; ball.y=oy; ball.vx=dx/d*sp; ball.vy=dy/d*sp; return; }   // 正面手前から少し角度を変えて供給→選手は回転で右ゴールへ
+    const ox=Math.min(L-1, acx+2.4), oy=Math.max(1.2, acy-4.6);                    // 出し元=自分の少しゴール側＆横(一定の相対位置)
+    const tx=acx+(Math.random()*2-1)*1.6, ty=acy+(Math.random()*2-1)*1.1;          // 着弾を毎回少しランダムに→タイミングで撃つ
+    const dx=tx-ox, dy=ty-oy, d=Math.hypot(dx,dy)||1, sp=2.4;
+    ball.x=ox; ball.y=oy; ball.vx=dx/d*sp; ball.vy=dy/d*sp; return; }
   const p=PRESETS[((practiceI%PRESETS.length)+PRESETS.length)%PRESETS.length]; ball.x=p.x; ball.y=p.y; ball.vx=0; ball.vy=0; }
 
 // ===== 戦術コーチ（3mルールの意味に基づく自動アドバイス）＋配置問題 =====
@@ -528,6 +528,7 @@ function pickWorld(ev){ const r=cv.getBoundingClientRect(); ndc.x=((ev.clientX-r
   return hit?{x:hit.x+L/2,y:hit.z+Wd/2}:null; }
 cv.addEventListener('pointerdown',ev=>{
   if(view==='fps'){ look={x:ev.clientX,y:ev.clientY}; cv.setPointerCapture(ev.pointerId); return; }
+  if(mode.ptype==='pass'){ const w=pickWorld(ev); if(w){ const att=cs.find(c=>c.tm==='blue'); if(att&&Math.hypot(att.x-w.x,att.y-w.y)<2.5){ drag={k:'mv',o:att}; cv.setPointerCapture(ev.pointerId); } } return; }  // パス練習:自分をドラッグ移動
   if(!(paused&&(mode.tac||mode.practice))){ // 通常プレイ：青機体をタップで操作対象に固定
     const w=pickWorld(ev); if(w){ let best=null,bd=1.4; cs.forEach(c=>{if(c.tm!=='blue')return; const d=Math.hypot(c.x-w.x,c.y-w.y); if(d<bd){bd=d;best=c;}}); if(best)setManual(best); }
     return; }
