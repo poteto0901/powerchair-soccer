@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア v13.5 - 俯瞰追従モード追加</title>
+<title>SFC Delteas 戦術ビューア v14 - スピンキック物理修正</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
   html, body { overscroll-behavior: none; height: 100%; }
@@ -2819,38 +2819,31 @@ function updateFPSMovement(dt) {
     const isFront = Math.abs(closestFwd - CHAIR_HALF_L) < 0.001;
     const e = isFront ? 0.85 : 0.75;
     
-    // vn < 0 のときのみ衝突処理（ボールが車椅子に向かっている / 車椅子がボールに突っ込む）
+    // === 衝突応答（接線=掃きを常時適用：スピンキックの本体）===
+    // 法線方向：ボールが面に向かっている時のみ反発（vn<0）
+    // 接線方向：動いている面（旋回・直進）は vn の符号に関係なくボールを常に掃く
+    let vAfterRelX = vRelX;
+    let vAfterRelZ = vRelZ;
     if (vn < 0) {
-      // === 法線方向反射 ===
-      // Vafter_rel = Vrelative - (1+e) * vn * N
-      const impulse = -(1 + e) * vn;  // 法線方向のインパルス（正の値）
-      const vAfterRelX = vRelX + impulse * nx;
-      const vAfterRelZ = vRelZ + impulse * nz;
-      
-      // === 接線方向摩擦（クーロン摩擦）===
-      // 接線方向の相対速度
-      const vRelT = vRelX * tx + vRelZ * tz;
-      let vAfterRelTX = vAfterRelX;
-      let vAfterRelTZ = vAfterRelZ;
-      if (Math.abs(vRelT) > 0.001) {
-        const muS = 0.4;  // ゴム同士の摩擦係数
-        const maxFrictionImpulse = muS * impulse;  // 最大摩擦インパルス
-        const frictionMag = Math.min(Math.abs(vRelT), maxFrictionImpulse);
-        const frictionImpulse = -Math.sign(vRelT) * frictionMag;
-        vAfterRelTX = vAfterRelX + tx * frictionImpulse;
-        vAfterRelTZ = vAfterRelZ + tz * frictionImpulse;
-      }
-      
-      // ワールド座標に戻す：Vball_new = Vafter_rel + Vcontact
-      ball.userData.vx = vAfterRelTX + vContactX;
-      ball.userData.vz = vAfterRelTZ + vContactZ;
-      
-      // 衝突情報を2D表示用に保存
-      const contactWorldX = newCenterX + contactArmX;
-      const contactWorldZ = newCenterZ + contactArmZ;
+      const impulse = -(1 + e) * vn;  // 法線インパルス（正）
+      vAfterRelX += impulse * nx;
+      vAfterRelZ += impulse * nz;
+    }
+    // 接線：面の接線速度へ GRIP 分だけ寄せる（常時）
+    const GRIP = 0.4;  // 掃き取りの強さ。吸い付くなら下げる／弾かないなら上げる
+    const vRelT = vRelX * tx + vRelZ * tz;
+    vAfterRelX += -GRIP * vRelT * tx;
+    vAfterRelZ += -GRIP * vRelT * tz;
+
+    // ワールド座標へ戻す：Vball_new = Vafter_rel + Vcontact
+    ball.userData.vx = vAfterRelX + vContactX;
+    ball.userData.vz = vAfterRelZ + vContactZ;
+
+    // 衝突情報を2D表示用に保存（反発か掃きが起きた時）
+    if (vn < 0 || Math.abs(vRelT) > 0.001) {
       lastCollision.active = true;
-      lastCollision.x = contactWorldX;
-      lastCollision.z = contactWorldZ;
+      lastCollision.x = newCenterX + contactArmX;
+      lastCollision.z = newCenterZ + contactArmZ;
       lastCollision.nx = nx;
       lastCollision.nz = nz;
       lastCollision.time = performance.now();
@@ -3613,6 +3606,6 @@ camera.lookAt(TOP_CAM_LOOK);
 players.forEach(p => p.mesh.userData.ring.visible = true);
 animate();
 </script>
-<div id="appVer" style="position:fixed;right:6px;bottom:4px;z-index:99999;pointer-events:none;font:11px/1 monospace;color:#fff;background:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px">v13.5 · 2026-06-18</div>
+<div id="appVer" style="position:fixed;right:6px;bottom:4px;z-index:99999;pointer-events:none;font:11px/1 monospace;color:#fff;background:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px">v14 · 2026-06-18 物理修正</div>
 </body>
 </html>
