@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v3 - 3視点/運営スタッフ配置</title>
+<title>SFC Delteas 戦術ビューア 3D v4 - 影/選手/3mルール/拡大/共有</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
@@ -15,11 +15,10 @@
   .btn{font:14px/1 inherit;border:1px solid rgba(255,255,255,.25);background:rgba(20,20,30,.7);color:#fff;border-radius:9px;padding:9px 12px;cursor:pointer;}
   .btn.on{background:#2f6fd6;border-color:#2f6fd6;}.btn:active{transform:scale(.96);}
   #score{position:fixed;top:54px;left:0;right:0;text-align:center;font-size:20px;font-weight:600;z-index:10;text-shadow:0 1px 3px #000;}
-  #info{position:fixed;top:84px;left:10px;font:12px/1.5 monospace;background:rgba(0,0,0,.45);padding:6px 9px;border-radius:6px;z-index:10;}
-  #hint{position:fixed;bottom:150px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.7);z-index:9;text-shadow:0 1px 2px #000;}
-  .ctl{position:fixed;bottom:14px;left:0;right:0;display:flex;justify-content:center;gap:8px;z-index:11;flex-wrap:wrap;}
+  #info{position:fixed;top:84px;left:10px;font:12px/1.5 monospace;background:rgba(0,0,0,.45);padding:6px 9px;border-radius:6px;z-index:10;max-width:230px;}
+  #hint{position:fixed;bottom:150px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.78);z-index:9;text-shadow:0 1px 2px #000;padding:0 10px;}
+  .ctl{position:fixed;bottom:14px;left:0;right:0;display:flex;justify-content:center;gap:6px;z-index:11;flex-wrap:wrap;padding:0 8px;}
   #ver{position:fixed;right:6px;bottom:54px;z-index:11;font:11px/1 monospace;color:#fff;background:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px;}
-  /* ジョイスティック（右手・右下） */
   #joy{position:fixed;right:24px;bottom:70px;width:128px;height:128px;border-radius:50%;background:rgba(40,40,55,.45);border:2px solid rgba(255,255,255,.3);z-index:12;touch-action:none;}
   #knob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:rgba(47,111,214,.85);border:2px solid #fff;}
   #joyLabel{position:fixed;right:42px;bottom:200px;font-size:11px;color:rgba(255,255,255,.6);z-index:12;}
@@ -38,15 +37,17 @@
 <div id="info"></div>
 <div id="hint"></div>
 <div class="ctl">
-  <button class="btn" id="view">視点: 俯瞰</button>
+  <button class="btn" id="view">視点: 斜め</button>
   <button class="btn" id="orient">縦型にする</button>
   <button class="btn" id="play">一時停止</button>
   <button class="btn" id="reset">配置リセット</button>
   <button class="btn" id="lock">操作: 自動</button>
+  <button class="btn" id="zoom">拡大: 全体</button>
+  <button class="btn" id="share">共有リンク</button>
 </div>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v3 · 2026-06-18</div>
+<div id="ver">3D v4 · 2026-06-18</div>
 
 <script type="importmap">
 { "imports": { "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js" } }
@@ -55,8 +56,11 @@
 import * as THREE from 'three';
 
 const L=30, Wd=18, GW=6, gTop=(Wd-GW)/2, gBot=(Wd+GW)/2;
-const HALLX=L+12, HALLZ=Wd+10;  // 体育館全域
+const HALLX=L+16, HALLZ=Wd+14;            // 体育館全域（コートより広い）
+const PB_DEPTH=4, PB_HALF=4.5;            // ペナルティ(ゴール)エリア
 const HX=0.65, HY=0.5, GUARD=0.12, BR=0.1625, EDGE=Math.hypot(HX+GUARD,HY);
+// 車椅子が走れる範囲＝体育館全域（壁の内側）
+const RX0=L/2-HALLX/2+0.8, RX1=L/2+HALLX/2-0.8, RY0=Wd/2-HALLZ/2+0.8, RY1=Wd/2+HALLZ/2-0.8;
 let SPEED=2.78; const ACC=4, DEC=8, MO=2.6, AAC=12, ADC=12, BDEC=0.5, E=0.5, GRIP=0.4;
 
 const ROSTER={
@@ -74,97 +78,126 @@ function slots(n){
 const cv=document.getElementById('cv');
 const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 const scene=new THREE.Scene(); scene.background=new THREE.Color(0x10131c);
 const camera=new THREE.PerspectiveCamera(50,1,0.05,400);
-scene.add(new THREE.AmbientLight(0xffffff,0.8));
-const dl=new THREE.DirectionalLight(0xffffff,0.7); dl.position.set(6,30,12); scene.add(dl);
+scene.add(new THREE.HemisphereLight(0xffffff,0x444448,0.55));
+scene.add(new THREE.AmbientLight(0xffffff,0.35));
+// 天井灯（上から）＋影
+const dl=new THREE.DirectionalLight(0xffffff,0.85); dl.position.set(4,32,8); dl.castShadow=true;
+dl.shadow.mapSize.set(2048,2048); dl.shadow.camera.near=2; dl.shadow.camera.far=90;
+dl.shadow.camera.left=-22; dl.shadow.camera.right=22; dl.shadow.camera.top=16; dl.shadow.camera.bottom=-16; dl.shadow.bias=-0.0006;
+scene.add(dl);
 
-// 体育館：床（外周）＋壁
-const gymFloor=new THREE.Mesh(new THREE.PlaneGeometry(HALLX,HALLZ), new THREE.MeshStandardMaterial({color:0x8a8f99,roughness:1}));
-gymFloor.rotation.x=-Math.PI/2; gymFloor.position.y=-0.02; scene.add(gymFloor);
+// ===== 体育館の床（木目）＋壁 =====
+function woodTex(base){ const c=document.createElement('canvas'); c.width=c.height=512; const x=c.getContext('2d');
+  x.fillStyle=base; x.fillRect(0,0,512,512);
+  for(let py=0;py<512;py+=42){ const v=Math.random()*22-11;
+    x.fillStyle='rgba('+(v>0?'255,255,255':'0,0,0')+','+(Math.abs(v)/130)+')'; x.fillRect(0,py,512,42);
+    x.strokeStyle='rgba(50,30,15,.35)'; x.lineWidth=2; x.beginPath();x.moveTo(0,py);x.lineTo(512,py);x.stroke();
+    x.strokeStyle='rgba(60,40,20,.10)'; for(let gx=2;gx<512;gx+=6){ x.beginPath(); x.moveTo(gx,py+3); x.lineTo(gx+(Math.random()*3-1.5),py+39); x.stroke(); } }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; return t; }
+const gymTex=woodTex('#b07a3c'); gymTex.repeat.set(HALLX/3,HALLZ/3);
+const gymFloor=new THREE.Mesh(new THREE.PlaneGeometry(HALLX,HALLZ), new THREE.MeshStandardMaterial({map:gymTex,roughness:.82,metalness:.05}));
+gymFloor.rotation.x=-Math.PI/2; gymFloor.position.y=-0.02; gymFloor.receiveShadow=true; scene.add(gymFloor);
 const wallMat=new THREE.MeshStandardMaterial({color:0x3a3f4a,roughness:1});
 function wall(w,d,x,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,3,d),wallMat); m.position.set(x,1.5,z); scene.add(m); }
 wall(HALLX,0.3,0,-HALLZ/2); wall(HALLX,0.3,0,HALLZ/2); wall(0.3,HALLZ,-HALLX/2,0); wall(0.3,HALLZ,HALLX/2,0);
-// ===== 試合運営の人・備品（元3D版と同じ配置イメージ）=====
-function person(color,x,z,ry){ const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.55,0.3), new THREE.MeshStandardMaterial({color,roughness:.8})); body.position.y=0.7; g.add(body);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.15,12,10), new THREE.MeshStandardMaterial({color:0xf0c8a0})); head.position.y=1.06; g.add(head);
-  g.position.set(x,0,z); if(ry)g.rotation.y=ry; scene.add(g); return g; }
-function chairProp(color,x,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(2*HX,0.45,2*HY), new THREE.MeshStandardMaterial({color,roughness:.7})); m.position.set(x,0.32,z); scene.add(m); }
+
+// 共用の簡易人物（観客・運営・選手）
+function makePerson(shirt){ const g=new THREE.Group();
+  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.5,0.28), new THREE.MeshStandardMaterial({color:shirt,roughness:.85})); torso.position.y=0.78; torso.castShadow=true; g.add(torso);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.14,12,10), new THREE.MeshStandardMaterial({color:0xf0c8a0,roughness:.9})); head.position.y=1.12; head.castShadow=true; g.add(head);
+  return g; }
+function person(color,x,z,ry){ const g=makePerson(color); g.position.set(x,0,z); if(ry)g.rotation.y=ry; scene.add(g); return g; }
+function chairProp(color,x,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(2*HX,0.45,2*HY), new THREE.MeshStandardMaterial({color,roughness:.7})); m.position.set(x,0.32,z); m.castShadow=true; scene.add(m); }
 function timerTex(){ const c=document.createElement('canvas'); c.width=256;c.height=96; const x=c.getContext('2d'); x.fillStyle='#000';x.fillRect(0,0,256,96); x.fillStyle='#19ff5a';x.font='bold 58px monospace';x.textAlign='center';x.textBaseline='middle';x.fillText('20:00',128,52); return new THREE.CanvasTexture(c); }
-(function buildArena(){
-  const OFFZ=-Wd/2-2;  // 記録席・ベンチ側
-  // オフィシャルテーブル＋記録用紙
-  const table=new THREE.Mesh(new THREE.BoxGeometry(3,0.74,1), new THREE.MeshStandardMaterial({color:0x4a3520})); table.position.set(0,0.37,OFFZ-0.3); scene.add(table);
-  // デジタイマー（自立スタンド・コートに向く）
+(function buildArena(){ const OFFZ=-Wd/2-2;
+  const table=new THREE.Mesh(new THREE.BoxGeometry(3,0.74,1), new THREE.MeshStandardMaterial({color:0x4a3520})); table.position.set(0,0.37,OFFZ-0.3); table.castShadow=true; scene.add(table);
   const post=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.0,0.1), new THREE.MeshStandardMaterial({color:0x333})); post.position.set(2.6,0.5,OFFZ-0.2); scene.add(post);
   const tboard=new THREE.Mesh(new THREE.PlaneGeometry(1.4,0.55), new THREE.MeshBasicMaterial({map:timerTex(),side:THREE.DoubleSide})); tboard.position.set(2.6,1.15,OFFZ-0.15); scene.add(tboard);
-  // 記録係2人（白）
   person(0xffffff,-0.6,OFFZ-0.9); person(0xffffff,0.6,OFFZ-0.9);
-  // ベンチ（青=+X側 / 赤=-X側）：コーチ＋控え2人＋控え車椅子2台
   function bench(cx,teamCol){ const b=new THREE.Mesh(new THREE.BoxGeometry(4,0.1,0.5), new THREE.MeshStandardMaterial({color:0x6b4423})); b.position.set(cx,0.42,OFFZ-0.1); scene.add(b);
     person(0x222222,cx-1.5,OFFZ-0.3); person(teamCol,cx-0.3,OFFZ-0.3); person(teamCol,cx+0.9,OFFZ-0.3);
     chairProp(teamCol,cx+0.2,OFFZ+1.0); chairProp(teamCol,cx+1.6,OFFZ+1.0); }
   bench(7,0x2f6fd6); bench(-7,0xd24a45);
-  // 審判：主審＋副審2（黄）コート反対側、コートを向く
   person(0xffd000,0,Wd/2+1.4,Math.PI); person(0xffd000,-9,Wd/2+1.2,Math.PI); person(0xffd000,9,Wd/2+1.2,Math.PI);
-  // 観客（両ロングサイドの外周に簡易配置）
   const cols=[0x884444,0x446688,0x668844,0x886644,0x555577,0x775555];
-  function crowd(z,rows,dir){ for(let r=0;r<rows;r++)for(let i=-10;i<=10;i+=2){ const c=cols[(Math.abs(Math.round(i))+r)%cols.length]; person(c, i+(r%2?1:0), z+dir*r*1.2, 0); } }
-  crowd(OFFZ-3,2,-1); crowd(Wd/2+3,2,1);
+  function crowd(z,rows,dir){ for(let r=0;r<rows;r++)for(let i=-11;i<=11;i+=2){ const c=cols[(Math.abs(Math.round(i))+r)%cols.length]; person(c,i+(r%2?1:0),z+dir*r*1.2,0); } }
+  crowd(OFFZ-3.5,2,-1); crowd(Wd/2+3,2,1);
 })();
 
-// コート床（線をテクスチャで）
+// ===== コート床（線）＝木目の上の塗装ライン =====
 function courtTexture(){ const c=document.createElement('canvas'); const S=40; c.width=L*S; c.height=Wd*S; const x=c.getContext('2d');
-  x.fillStyle='#cda06b'; x.fillRect(0,0,c.width,c.height);
-  x.strokeStyle='rgba(255,255,255,.92)'; x.lineWidth=4; x.strokeRect(8,8,c.width-16,c.height-16);
-  x.beginPath(); x.moveTo(c.width/2,8); x.lineTo(c.width/2,c.height-8); x.stroke();
+  x.fillStyle='#caa06a'; x.fillRect(0,0,c.width,c.height);
+  for(let py=0;py<c.height;py+=44){ const v=Math.random()*16-8; x.fillStyle='rgba('+(v>0?'255,255,255':'0,0,0')+','+(Math.abs(v)/150)+')'; x.fillRect(0,py,c.width,44); }
+  x.strokeStyle='rgba(255,255,255,.95)'; x.lineWidth=5; x.strokeRect(10,10,c.width-20,c.height-20);
+  x.beginPath(); x.moveTo(c.width/2,10); x.lineTo(c.width/2,c.height-10); x.stroke();
   x.beginPath(); x.arc(c.width/2,c.height/2,3*S,0,7); x.stroke();
-  x.strokeStyle='rgba(60,120,200,.55)'; x.lineWidth=3; x.strokeRect(8,(Wd/2-4.5)*S,4*S,9*S);
-  x.strokeStyle='rgba(210,74,69,.55)'; x.strokeRect(c.width-8-4*S,(Wd/2-4.5)*S,4*S,9*S);
+  x.lineWidth=4; x.strokeStyle='rgba(60,120,200,.65)'; x.strokeRect(10,(Wd/2-PB_HALF)*S,PB_DEPTH*S,PB_HALF*2*S);
+  x.strokeStyle='rgba(210,74,69,.65)'; x.strokeRect(c.width-10-PB_DEPTH*S,(Wd/2-PB_HALF)*S,PB_DEPTH*S,PB_HALF*2*S);
   const t=new THREE.CanvasTexture(c); t.anisotropy=4; return t; }
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(L,Wd), new THREE.MeshStandardMaterial({map:courtTexture(),roughness:.95}));
-floor.rotation.x=-Math.PI/2; scene.add(floor);
+const courtFloor=new THREE.Mesh(new THREE.PlaneGeometry(L,Wd), new THREE.MeshStandardMaterial({map:courtTexture(),roughness:.9}));
+courtFloor.rotation.x=-Math.PI/2; courtFloor.position.y=0.005; courtFloor.receiveShadow=true; scene.add(courtFloor);
 function goal(xEnd,color){ const mat=new THREE.MeshStandardMaterial({color});
-  [gTop,gBot].forEach(z=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,1.2,10),mat); p.position.set(xEnd-L/2,.6,z-Wd/2); scene.add(p); }); }
+  [gTop,gBot].forEach(z=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,1.2,10),mat); p.position.set(xEnd-L/2,.6,z-Wd/2); p.castShadow=true; scene.add(p); }); }
 goal(0,0x2f6fd6); goal(L,0xd24a45);
 
+// ボール（白＋黒パネルで視認性UP・実寸32.5cm）＋影
+function ballTexture(){ const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d');
+  x.fillStyle='#f5f5f5'; x.fillRect(0,0,128,128);
+  x.fillStyle='#1a1a1a'; for(const[px,py]of [[64,30],[28,70],[100,70],[46,108],[82,108],[64,128]]){ x.beginPath(); for(let k=0;k<5;k++){const a=k/5*6.283-1.57; x.lineTo(px+Math.cos(a)*15,py+Math.sin(a)*15);} x.closePath(); x.fill(); }
+  x.strokeStyle='#888'; x.lineWidth=2; x.strokeRect(1,1,126,126);
+  return new THREE.CanvasTexture(c); }
 function numberSprite(txt,bg){ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d');
-  x.fillStyle=bg; x.beginPath(); x.arc(32,32,30,0,7); x.fill();
+  x.fillStyle=bg; x.beginPath(); x.arc(32,32,30,0,7); x.fill(); x.lineWidth=3; x.strokeStyle='#fff'; x.stroke();
   x.fillStyle='#fff'; x.font='bold 34px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(txt,32,34);
-  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false})); s.scale.set(.9,.9,.9); s.position.y=1.0; return s; }
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false})); return s; }
 function makeChairMesh(team,label,gk){ const g=new THREE.Group();
   const col=team==='blue'?0x2f6fd6:0xd24a45, dk=team==='blue'?0x17407f:0x8a2723;
-  const body=new THREE.Mesh(new THREE.BoxGeometry(2*HX,0.45,2*HY), new THREE.MeshStandardMaterial({color:gk?(team==='blue'?0x6fa8ff:0xff8f8a):col,roughness:.7})); body.position.y=0.32; g.add(body);
-  const guard=new THREE.Mesh(new THREE.BoxGeometry(GUARD*1.6,0.5,2*HY+0.1), new THREE.MeshStandardMaterial({color:dk})); guard.position.set(HX+GUARD*0.5,0.30,0); g.add(guard);
-  const seat=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.5,8), new THREE.MeshStandardMaterial({color:0x222})); seat.position.set(-0.1,0.62,0); g.add(seat);
-  const spr=numberSprite(label,dk); g.add(spr); g.userData.sprite=spr; return g; }
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2*HX,0.4,2*HY), new THREE.MeshStandardMaterial({color:gk?(team==='blue'?0x6fa8ff:0xff8f8a):0x2a2a30,roughness:.7})); body.position.y=0.28; g.add(body);
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(GUARD*1.6,0.46,2*HY+0.1), new THREE.MeshStandardMaterial({color:dk})); guard.position.set(HX+GUARD*0.5,0.26,0); g.add(guard);
+  // 後輪上に着座した選手（観客と同じデザイン・チームシャツ）
+  const pg=makePerson(gk?(team==='blue'?0x6fa8ff:0xff8f8a):col); pg.position.set(-HX*0.18,0.16,0); g.add(pg); g.userData.person=pg;
+  // 番号は選手の胸あたり（小さめ）
+  const spr=numberSprite(label,dk); spr.scale.set(0.62,0.62,0.62); spr.position.set(-HX*0.18,1.02,0); g.add(spr);
+  // 状態リング（戦術ボードの3mルール表示用・既定は非表示）
+  const sr=new THREE.Mesh(new THREE.TorusGeometry(0.95,0.06,8,28), new THREE.MeshBasicMaterial({color:0x39d353})); sr.rotation.x=-Math.PI/2; sr.position.y=0.04; sr.visible=false; g.add(sr); g.userData.statusRing=sr;
+  g.traverse(o=>{ if(o.isMesh&&o!==sr)o.castShadow=true; });
+  return g; }
 
-function makeRing(color){ const r=new THREE.Mesh(new THREE.TorusGeometry(EDGE*1.05,0.06,8,28), new THREE.MeshBasicMaterial({color})); r.rotation.x=-Math.PI/2; r.position.y=0.05; r.visible=false; scene.add(r); return r; }
+function makeRing(color){ const r=new THREE.Mesh(new THREE.TorusGeometry(EDGE*1.05,0.06,8,28), new THREE.MeshBasicMaterial({color})); r.rotation.x=-Math.PI/2; r.position.y=0.06; r.visible=false; scene.add(r); return r; }
 const ringB=makeRing(0xf5c518), ringR=makeRing(0xffa030);
-const ballMesh=new THREE.Mesh(new THREE.SphereGeometry(BR,20,16), new THREE.MeshStandardMaterial({color:0xffffff,roughness:.5})); scene.add(ballMesh);
+// 3mルール円（ボール中心・戦術ボードで表示）
+const ballRing=new THREE.Mesh(new THREE.TorusGeometry(3,0.05,8,48), new THREE.MeshBasicMaterial({color:0x33ddff,transparent:true,opacity:0.85})); ballRing.rotation.x=-Math.PI/2; ballRing.position.y=0.03; ballRing.visible=false; scene.add(ballRing);
+// 戦術：向き調整ハンドル
+const aim=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.5,12), new THREE.MeshBasicMaterial({color:0xffdd44})); aim.rotation.x=Math.PI/2; aim.visible=false; scene.add(aim);
+const ballMesh=new THREE.Mesh(new THREE.SphereGeometry(BR,22,18), new THREE.MeshStandardMaterial({map:ballTexture(),roughness:.55})); ballMesh.castShadow=true; scene.add(ballMesh);
 
 // ===== 状態 =====
 let cs=[], ball, sA, sB, mode, paused=false, lastHit=null;
 let ctrlBlue=null, ctrlRed=null, lockSix=false;
-const keys={};
-let joy={x:0,y:0,active:false};
+let selected=null, zoomMode=0;        // 戦術：選択駒 / 拡大(0全体1左2右)
+let eyeYaw=0, eyePitch=-0.30;          // 1人称の視点（既定でやや下向き）
+const keys={}; let joy={x:0,y:0,active:false};
 
 function build(){ cs.forEach(c=>scene.remove(c.mesh)); cs=[]; const sl=slots(mode.n);
   ['blue','red'].forEach(team=>{ const lu=lineup(team,mode.n);
     sl.forEach((s,i)=>{ const sx=team==='blue'?s.x:L-s.x; const info=lu[i]||{n:'?',name:'?'};
       const mesh=makeChairMesh(team,info.n,!!info.gk); scene.add(mesh);
       cs.push({tm:team,role:info.gk?'gk':'fp',name:info.name,num:info.n,hx:sx,hy:s.y,x:sx,y:s.y,th:team==='blue'?0:Math.PI,spd:0,om:0,thr:0,turn:0,mesh}); }); });
-  ball={x:L/2,y:Wd/2,vx:0,vy:0}; ctrlBlue=null; ctrlRed=null; }
+  ball={x:L/2,y:Wd/2,vx:0,vy:0}; ctrlBlue=null; ctrlRed=null; selected=null; }
 function place(){ cs.forEach(c=>{c.x=c.hx;c.y=c.hy;c.th=c.tm==='blue'?0:Math.PI;c.spd=0;c.om=0;c.thr=0;c.turn=0;}); ball.x=L/2;ball.y=Wd/2;ball.vx=0;ball.vy=0; lastHit=null; }
-function start(mk){ mode=mk; sA=0;sB=0; build(); place(); paused=!!mode.tac;
+function start(mk){ mode=mk; sA=0;sB=0; build(); place(); paused=!!mode.tac; selected=null; zoomMode=0; document.getElementById('zoom').textContent='拡大: 全体';
   document.getElementById('play').textContent=paused?'再生':'一時停止';
   [...document.querySelectorAll('#modes .btn')].forEach(b=>b.classList.toggle('on',b.dataset.m===mode.key));
-  document.getElementById('hint').textContent = mode.twoP? '1P=スティック/WASD ／ 2P=↑↓←→'
-    : (mode.tac? '戦術：選手やボールをドラッグ→「再生」' : 'スティック/WASD/↑↓←→で操作。回転して端で叩く=スピンキック'); }
+  document.getElementById('hint').textContent = mode.tac
+    ? '戦術：駒/ボールをドラッグで移動・前方の黄コーンをドラッグで向き変更。水色=ボール半径3m。3m内に同色2台＝赤(2対1反則)、1台のみ=緑'
+    : (mode.twoP? '1P=スティック/WASD ／ 2P=↑↓←→'
+    : 'スティック/WASD/↑↓←→で操作。回して端で叩く=スピンキック'); }
 const MODES={'1v1':{key:'1v1',n:1},'3v3':{key:'3v3',n:3},'4v4':{key:'4v4',n:4},'tac':{key:'tac',n:4,tac:true},'2p':{key:'2p',n:3,twoP:true}};
 
-// ===== 物理（連続入力 thr/turn）=====
+// ===== 物理 =====
 function nA(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
 function approach(cur,tgt,acc,brk,dt){ const d=tgt-cur; let r=(Math.abs(tgt)<0.001||cur*tgt<0)?brk:acc; const mc=r*dt; return Math.abs(d)<=mc?tgt:cur+Math.sign(d)*mc; }
 function updChair(c,dt){
@@ -173,16 +206,16 @@ function updChair(c,dt){
   if(Math.abs(tv)<0.001&&Math.abs(c.spd)<0.02)c.spd=0; if(Math.abs(ta)<0.001&&Math.abs(c.om)<0.02)c.om=0;
   c.th+=c.om*dt; const fx=Math.cos(c.th),fy=Math.sin(c.th);
   c.x+=fx*c.spd*dt; c.y+=fy*c.spd*dt;
-  const R=EDGE;
-  if(c.x<R){c.x=R;if(c.spd*fx<0)c.spd*=0.3;} if(c.x>L-R){c.x=L-R;if(c.spd*fx>0)c.spd*=0.3;}
-  if(c.y<R){c.y=R;if(c.spd*fy<0)c.spd*=0.3;} if(c.y>Wd-R){c.y=Wd-R;if(c.spd*fy>0)c.spd*=0.3;}
+  // 体育館全域で停止（ライン外も自由に走行）
+  if(c.x<RX0){c.x=RX0;if(c.spd*fx<0)c.spd*=0.2;} if(c.x>RX1){c.x=RX1;if(c.spd*fx>0)c.spd*=0.2;}
+  if(c.y<RY0){c.y=RY0;if(c.spd*fy<0)c.spd*=0.2;} if(c.y>RY1){c.y=RY1;if(c.spd*fy>0)c.spd*=0.2;}
 }
 function resolve(c){
   const dx=ball.x-c.x,dy=ball.y-c.y,ct=Math.cos(c.th),st=Math.sin(c.th);
   const lx=dx*ct+dy*st, ly=-dx*st+dy*ct, ex=HX+GUARD;
   const cxl=Math.max(-ex,Math.min(ex,lx)),cyl=Math.max(-HY,Math.min(HY,ly));
-  let ddx=lx-cxl,ddy=ly-cyl,dist=Math.hypot(ddx,ddy),nlx,nly,pen;
-  if(dist>1e-6){ if(dist>=BR)return; nlx=ddx/dist;nly=ddy/dist;pen=BR-dist; }
+  let ddx=lx-cxl,ddy=ly-cyl,dist2=Math.hypot(ddx,ddy),nlx,nly,pen;
+  if(dist2>1e-6){ if(dist2>=BR)return; nlx=ddx/dist2;nly=ddy/dist2;pen=BR-dist2; }
   else{ const dr=ex-lx,dl=lx+ex,dt2=HY-ly,db=ly+HY,m=Math.min(dr,dl,dt2,db);
     if(m===dr){nlx=1;nly=0}else if(m===dl){nlx=-1;nly=0}else if(m===dt2){nlx=0;nly=1}else{nlx=0;nly=-1}pen=BR+m; }
   const nx=nlx*ct-nly*st, ny=nlx*st+nly*ct, tx=-ny, tz=nx;
@@ -198,85 +231,84 @@ function resolve(c){
 function sep(){ for(let i=0;i<cs.length;i++)for(let k=i+1;k<cs.length;k++){const a=cs[i],b=cs[k];
   const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),md=EDGE*1.7;
   if(d<md&&d>1e-3){const o=(md-d)/2,ux=dx/d,uy=dy/d;a.x-=ux*o;a.y-=uy*o;b.x+=ux*o;b.y+=uy*o;a.spd*=0.8;b.spd*=0.8;}}}
-
-// 操作対象選択（ヒステリシスで点滅防止）
 function dist(c){return Math.hypot(ball.x-c.x,ball.y-c.y);}
+function inOwnBox(c){ const yIn=c.y>Wd/2-PB_HALF&&c.y<Wd/2+PB_HALF; return c.tm==='blue'?(c.x<PB_DEPTH&&yIn):(c.x>L-PB_DEPTH&&yIn); }
 function pickControlled(team,cur){
   if(team==='blue'&&lockSix){ const six=cs.find(c=>c.tm==='blue'&&c.num==='6'); if(six)return six; }
   let near=null,nd=1e9; cs.forEach(c=>{if(c.tm!==team||(c.role==='gk'&&mode.n>1))return; const d=dist(c); if(d<nd){nd=d;near=c;}});
   if(!cur||cs.indexOf(cur)<0) return near;
-  if(near&&near!==cur&&nd<dist(cur)-0.8) return near;   // 0.8m以上近い時だけ乗り換え
-  return cur;
+  if(near&&near!==cur&&nd<dist(cur)-0.8) return near; return cur;
 }
 function chaser(team){ let best=null,bd=1e9; cs.forEach(c=>{if(c.tm!==team||c.role==='gk')return; const d=dist(c); if(d<bd){bd=d;best=c;}}); return best||cs.find(c=>c.tm===team); }
 function aiSteer(c,tx,ty,stop){ const ang=Math.atan2(ty-c.y,tx-c.x),diff=nA(ang-c.th);
-  c.turn=Math.max(-1,Math.min(1,diff*1.6));
-  c.thr=(Math.abs(diff)<0.7&&Math.hypot(tx-c.x,ty-c.y)>(stop||0.5))?1:0; }
+  c.turn=Math.max(-1,Math.min(1,diff*1.6)); c.thr=(Math.abs(diff)<0.7&&Math.hypot(tx-c.x,ty-c.y)>(stop||0.5))?1:0; }
 function ai(c,chB,chR){ const ch=c.tm==='blue'?chB:chR;
   if(c.role==='gk'&&mode.n>1){ const gx=c.tm==='blue'?L*0.05:L*0.95, gy=Math.max(gTop+0.5,Math.min(gBot-0.5,ball.y)); aiSteer(c,gx,gy,0.3); return; }
   if(c===ch){ const og=c.tm==='blue'?{x:L,y:Wd/2}:{x:0,y:Wd/2}; let dx=ball.x-og.x,dy=ball.y-og.y,dl=Math.hypot(dx,dy)||1;
     aiSteer(c, ball.x+dx/dl*(HX+GUARD+BR+0.3), ball.y+dy/dl*(HX+GUARD+BR+0.3), 0.25); return; }
   aiSteer(c, c.hx, Math.max(1,Math.min(Wd-1,c.hy*0.5+ball.y*0.5)), 0.6); }
 
-function humanInput(){ // 青(1P): スティック優先、なければキー
-  let thr=0,turn=0;
-  if(joy.active){ const m=Math.hypot(joy.x,joy.y);
-    if(m>=0.08){ const adj=Math.min(1,(m-0.08)/0.92), r=Math.pow(adj,1.7)/m; const cx=joy.x*r, cy=joy.y*r; thr=-cy; turn=cx; } }
-  else { let kx=0,ky=0;
-    if(keys['w']||keys['arrowup'])ky-=1; if(keys['s']||keys['arrowdown'])ky+=1;
-    if(keys['a']||keys['arrowleft'])kx-=1; if(keys['d']||keys['arrowright'])kx+=1;
-    if(kx||ky){const m=Math.hypot(kx,ky); thr=-ky/m; turn=kx/m;} }
-  return {thr,turn};
-}
-function redKeyInput(){ let kx=0,ky=0;
-  if(keys['arrowup'])ky-=1; if(keys['arrowdown'])ky+=1; if(keys['arrowleft'])kx-=1; if(keys['arrowright'])kx+=1;
+function humanInput(){ let thr=0,turn=0;
+  if(joy.active){ const m=Math.hypot(joy.x,joy.y); if(m>=0.08){ const adj=Math.min(1,(m-0.08)/0.92), r=Math.pow(adj,1.7)/m; thr=-joy.y*r; turn=joy.x*r; } }
+  else { let kx=0,ky=0; if(keys['w']||keys['arrowup'])ky-=1; if(keys['s']||keys['arrowdown'])ky+=1; if(keys['a']||keys['arrowleft'])kx-=1; if(keys['d']||keys['arrowright'])kx+=1;
+    if(kx||ky){const m=Math.hypot(kx,ky); thr=-ky/m; turn=kx/m;} } return {thr,turn}; }
+function redKeyInput(){ let kx=0,ky=0; if(keys['arrowup'])ky-=1; if(keys['arrowdown'])ky+=1; if(keys['arrowleft'])kx-=1; if(keys['arrowright'])kx+=1;
   if(kx||ky){const m=Math.hypot(kx,ky); return {thr:-ky/m,turn:kx/m};} return {thr:0,turn:0}; }
 
 function step(dt){
-  ctrlBlue=pickControlled('blue',ctrlBlue);
-  ctrlRed=mode.twoP?pickControlled('red',ctrlRed):null;
-  const chB=chaser('blue'), chR=chaser('red');
-  const hi=humanInput(), ri=mode.twoP?redKeyInput():null;
-  cs.forEach(c=>{
-    if(c===ctrlBlue){ c.thr=hi.thr; c.turn=hi.turn; }
-    else if(c===ctrlRed){ c.thr=ri.thr; c.turn=ri.turn; }
-    else ai(c,chB,chR);
-  });
+  ctrlBlue=pickControlled('blue',ctrlBlue); ctrlRed=mode.twoP?pickControlled('red',ctrlRed):null;
+  const chB=chaser('blue'), chR=chaser('red'); const hi=humanInput(), ri=mode.twoP?redKeyInput():null;
+  cs.forEach(c=>{ if(c===ctrlBlue){c.thr=hi.thr;c.turn=hi.turn;} else if(c===ctrlRed){c.thr=ri.thr;c.turn=ri.turn;} else ai(c,chB,chR); });
   cs.forEach(c=>updChair(c,dt)); sep();
   ball.x+=ball.vx*dt; ball.y+=ball.vy*dt;
   const sp=Math.hypot(ball.vx,ball.vy); if(sp>0){const ns=Math.max(0,sp-BDEC*dt);ball.vx*=ns/sp;ball.vy*=ns/sp;}
   cs.forEach(resolve);
-  // ゴール判定 ＆ 場外＝ライン上で停止（遠くへ行かせない）
-  if(ball.x-BR<0){ if(ball.y>gTop&&ball.y<gBot){sA++;place();return;} ball.x=BR+0.02; ball.vx=0; ball.vy=0; }
-  if(ball.x+BR>L){ if(ball.y>gTop&&ball.y<gBot){sB++;place();return;} ball.x=L-BR-0.02; ball.vx=0; ball.vy=0; }
-  if(ball.y-BR<0){ ball.y=BR+0.02; ball.vx=0; ball.vy=0; }
-  if(ball.y+BR>Wd){ ball.y=Wd-BR-0.02; ball.vx=0; ball.vy=0; }
+  // ゴール ＆ ライン外＝出た地点で停止して再スタート
+  if(ball.x-BR<0){ if(ball.y>gTop&&ball.y<gBot){sA++;place();return;} ball.x=BR+0.02; ball.vx=0;ball.vy=0; }
+  if(ball.x+BR>L){ if(ball.y>gTop&&ball.y<gBot){sB++;place();return;} ball.x=L-BR-0.02; ball.vx=0;ball.vy=0; }
+  if(ball.y-BR<0){ ball.y=BR+0.02; ball.vx=0;ball.vy=0; }
+  if(ball.y+BR>Wd){ ball.y=Wd-BR-0.02; ball.vx=0;ball.vy=0; }
   if(lastHit)lastHit.t-=dt;
 }
 
 // ===== 描画 =====
 function mX(wx){return wx-L/2;} function mZ(wy){return wy-Wd/2;}
+function updateRule(){ // 戦術ボードの3mルール可視化
+  const tac=!!(mode&&mode.tac); ballRing.visible=tac;
+  if(tac) ballRing.position.set(mX(ball.x),0.03,mZ(ball.y));
+  cs.forEach(c=>{ const sr=c.mesh.userData.statusRing; if(!tac){sr.visible=false;return;} sr.visible=false; });
+  if(!tac) return;
+  ['blue','red'].forEach(team=>{
+    const near=cs.filter(c=>c.tm===team && !(c.role==='gk'&&inOwnBox(c)) && dist(c)<3);
+    near.forEach(c=>{ const sr=c.mesh.userData.statusRing; sr.visible=true; sr.material.color.setHex(near.length>=2?0xe24b4a:0x39d353); });
+  });
+}
 function syncMeshes(){
   cs.forEach(c=>{ c.mesh.position.set(mX(c.x),0,mZ(c.y)); c.mesh.rotation.y=-c.th;
-    const hideFPS=(view==='fps'&&c===ctrlBlue); c.mesh.visible=!hideFPS; });
-  ballMesh.position.set(mX(ball.x),BR,mZ(ball.y));
-  ringB.visible=!!ctrlBlue&&view!=='fps'; if(ctrlBlue)ringB.position.set(mX(ctrlBlue.x),0.05,mZ(ctrlBlue.y));
-  ringR.visible=!!ctrlRed&&view!=='fps'; if(ctrlRed)ringR.position.set(mX(ctrlRed.x),0.05,mZ(ctrlRed.y));
+    if(c.mesh.userData.person) c.mesh.userData.person.visible=!(view==='fps'&&c===ctrlBlue); });
+  ballMesh.position.set(mX(ball.x),BR,mZ(ball.y)); ballMesh.rotation.y-=0.04;
+  ringB.visible=!!ctrlBlue&&view!=='fps'; if(ctrlBlue)ringB.position.set(mX(ctrlBlue.x),0.06,mZ(ctrlBlue.y));
+  ringR.visible=!!ctrlRed&&view!=='fps'; if(ctrlRed)ringR.position.set(mX(ctrlRed.x),0.06,mZ(ctrlRed.y));
+  const tac=!!(mode&&mode.tac);
+  aim.visible=tac&&!!selected; if(tac&&selected){ aim.position.set(mX(selected.x+Math.cos(selected.th)*1.5),0.3,mZ(selected.y+Math.sin(selected.th)*1.5)); aim.rotation.set(Math.PI/2,0,-selected.th-Math.PI/2); }
+  updateRule();
   document.getElementById('score').textContent='青 '+sA+' - '+sB+' 赤   '+mode.n+'対'+mode.n;
-  const c=ctrlBlue;
-  if(c)document.getElementById('info').innerHTML='操作: #'+c.num+' '+c.name+'<br>車速 '+Math.abs(c.spd).toFixed(1)+' m/s<br>回転 '+c.om.toFixed(1)+' rad/s<br>ボール '+Math.hypot(ball.vx,ball.vy).toFixed(1)+' m/s';
+  if(tac&&selected){ const d=dist(selected).toFixed(1); document.getElementById('info').innerHTML='選択: #'+selected.num+' '+selected.name+'<br>ボールまで '+d+' m '+(selected.role==='gk'&&inOwnBox(selected)?'(GK例外)':(dist(selected)<3?'(3m内)':'(3m外)'))+'<br>向き調整=黄コーンをドラッグ'; }
+  else { const c=ctrlBlue; if(c)document.getElementById('info').innerHTML='操作: #'+c.num+' '+c.name+'<br>車速 '+Math.abs(c.spd).toFixed(1)+' m/s<br>回転 '+c.om.toFixed(1)+' rad/s<br>ボール '+Math.hypot(ball.vx,ball.vy).toFixed(1)+' m/s'; }
 }
 
 // ===== カメラ =====
 let view='over', orient='land';
 function updateCamera(){
-  if(view==='fps'&&ctrlBlue){ const c=ctrlBlue, fx=Math.cos(c.th), fy=Math.sin(c.th);
-    camera.up.set(0,1,0); camera.position.set(mX(c.x)-fx*0.1,1.35,mZ(c.y)-fy*0.1);
-    camera.lookAt(mX(c.x)+fx*6,1.15,mZ(c.y)+fy*6);
+  const zt=(mode&&mode.tac&&zoomMode)?(zoomMode===1?-L/4:L/4):0; const z=zt!==0;
+  if(view==='fps'&&ctrlBlue){ const c=ctrlBlue, yaw=c.th+eyeYaw, pit=eyePitch;
+    const ex=mX(c.x)-Math.cos(c.th)*0.12, ez=mZ(c.y)-Math.sin(c.th)*0.12, ey=1.3;
+    camera.up.set(0,1,0); camera.position.set(ex,ey,ez);
+    camera.lookAt(ex+Math.cos(yaw)*Math.cos(pit)*6, ey+Math.sin(pit)*6, ez+Math.sin(yaw)*Math.cos(pit)*6);
   } else if(view==='top'){ camera.up.set(orient==='land'?0:-1,0,orient==='land'?-1:0);
-    camera.position.set(0,34,0.001); camera.lookAt(0,0,0);
-  } else { const az=orient==='land'?0:Math.PI/2, r=21, h=24; camera.up.set(0,1,0);
-    camera.position.set(Math.sin(az)*r,h,Math.cos(az)*r+(orient==='land'?3:0)); camera.lookAt(0,0,0); }
+    camera.position.set(zt,z?20:34,0.001); camera.lookAt(zt,0,0);
+  } else { const az=orient==='land'?0:Math.PI/2, r=z?12:21, h=z?15:24; camera.up.set(0,1,0);
+    camera.position.set(zt+Math.sin(az)*r,h,Math.cos(az)*r+(orient==='land'?3:0)); camera.lookAt(zt,0,0); }
 }
 function resize(){ const w=cv.clientWidth,h=cv.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
 
@@ -287,8 +319,7 @@ function loop(t){ let dt=(t-last)/1000; last=t; dt=Math.min(dt,0.05);
 
 // ===== 入力 =====
 addEventListener('keydown',e=>{const k=e.key.toLowerCase(); if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){keys[k]=true;e.preventDefault();}});
-addEventListener('keyup',e=>{const k=e.key.toLowerCase(); if(keys[k]!==undefined||['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){keys[k]=false;}});
-// ジョイスティック
+addEventListener('keyup',e=>{const k=e.key.toLowerCase(); if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){keys[k]=false;}});
 const joyEl=document.getElementById('joy'), knob=document.getElementById('knob'); const JR=64;
 function joySet(ev){ const r=joyEl.getBoundingClientRect(); let dx=ev.clientX-(r.left+r.width/2), dy=ev.clientY-(r.top+r.height/2);
   const m=Math.hypot(dx,dy); if(m>JR){dx*=JR/m;dy*=JR/m;} knob.style.transform='translate('+dx+'px,'+dy+'px)'; joy.x=dx/JR; joy.y=dy/JR; joy.active=true; }
@@ -302,26 +333,46 @@ document.getElementById('play').addEventListener('click',function(){paused=!paus
 document.getElementById('reset').addEventListener('click',()=>place());
 document.getElementById('orient').addEventListener('click',function(){orient=orient==='land'?'port':'land';this.textContent=orient==='land'?'縦型にする':'横型にする';});
 const VIEWS=['top','over','fps'], VLAB={top:'真上',over:'斜め',fps:'1人称'};
-function setViewLabel(){ document.getElementById('view').textContent='視点: '+VLAB[view]; }
-document.getElementById('view').addEventListener('click',function(){ view=VIEWS[(VIEWS.indexOf(view)+1)%VIEWS.length]; setViewLabel(); });
-setViewLabel();
+document.getElementById('view').addEventListener('click',function(){ view=VIEWS[(VIEWS.indexOf(view)+1)%VIEWS.length]; this.textContent='視点: '+VLAB[view]; });
 document.getElementById('lock').addEventListener('click',function(){lockSix=!lockSix;this.textContent='操作: '+(lockSix?'#6固定':'自動');});
+document.getElementById('zoom').addEventListener('click',function(){ zoomMode=(zoomMode+1)%3; this.textContent='拡大: '+['全体','左ゴール','右ゴール'][zoomMode]; });
 
-// 戦術ドラッグ（停止中・俯瞰のみ）
-const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(); let drag=null;
+// ===== 共有（オンライン同期の下準備）=====
+// 将来: Cloudflare Workers(WebSocket/Durable Object)で serialize() を配信し合えばリアルタイム共有可能
+function serialize(){ return btoa(unescape(encodeURIComponent(JSON.stringify({
+  m:mode.key,o:orient,b:[+ball.x.toFixed(2),+ball.y.toFixed(2)],
+  c:cs.map(c=>[c.tm[0],c.num,+c.x.toFixed(2),+c.y.toFixed(2),+c.th.toFixed(2)]) })))); }
+function applyState(o){ try{ start(MODES[o.m]||MODES['4v4']); if(o.o)orient=o.o; document.getElementById('orient').textContent=orient==='land'?'縦型にする':'横型にする';
+  ball.x=+o.b[0];ball.y=+o.b[1]; (o.c||[]).forEach((d,i)=>{ if(cs[i]){cs[i].x=+d[2];cs[i].y=+d[3];cs[i].th=+d[4];} }); paused=true; document.getElementById('play').textContent='再生'; }catch(e){} }
+document.getElementById('share').addEventListener('click',function(){ const url=location.origin+location.pathname+'#s='+serialize();
+  const b=this; if(navigator.clipboard){navigator.clipboard.writeText(url).then(()=>{b.textContent='コピー済';setTimeout(()=>b.textContent='共有リンク',1500);});} else { location.hash='s='+serialize(); b.textContent='URL更新';setTimeout(()=>b.textContent='共有リンク',1500);} });
+function loadHash(){ if(location.hash.indexOf('#s=')===0){ try{ applyState(JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))))); }catch(e){} } }
+
+// ===== ポインタ（戦術ドラッグ＆回転 / 1人称ルック）=====
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(); let drag=null, look=null;
 function pickWorld(ev){ const r=cv.getBoundingClientRect(); ndc.x=((ev.clientX-r.left)/r.width)*2-1; ndc.y=-((ev.clientY-r.top)/r.height)*2+1;
   ray.setFromCamera(ndc,camera); const hit=new THREE.Vector3(); ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),hit);
   return hit?{x:hit.x+L/2,y:hit.z+Wd/2}:null; }
-cv.addEventListener('pointerdown',ev=>{ if(!paused||view!=='over')return; const w=pickWorld(ev); if(!w)return; let best=null,bd=1.2;
-  cs.forEach(c=>{const d=Math.hypot(c.x-w.x,c.y-w.y);if(d<bd){bd=d;best=c;}});
-  const db=Math.hypot(ball.x-w.x,ball.y-w.y); if(db<bd&&db<1.2)best=ball;
-  if(best){drag=best;cv.setPointerCapture(ev.pointerId);} });
-cv.addEventListener('pointermove',ev=>{ if(!drag)return; const w=pickWorld(ev); if(!w)return;
-  drag.x=Math.max(0.5,Math.min(L-0.5,w.x)); drag.y=Math.max(0.5,Math.min(Wd-0.5,w.y)); if(drag.spd!==undefined){drag.spd=0;drag.om=0;} });
-cv.addEventListener('pointerup',()=>drag=null); cv.addEventListener('pointercancel',()=>drag=null);
+cv.addEventListener('pointerdown',ev=>{
+  if(view==='fps'){ look={x:ev.clientX,y:ev.clientY}; cv.setPointerCapture(ev.pointerId); return; }
+  if(!(paused&&mode.tac))return; const w=pickWorld(ev); if(!w)return;
+  if(selected){ const hx=selected.x+Math.cos(selected.th)*1.5, hy=selected.y+Math.sin(selected.th)*1.5;
+    if(Math.hypot(hx-w.x,hy-w.y)<0.85){ drag={k:'rot'}; cv.setPointerCapture(ev.pointerId); return; } }
+  let best=null,bd=1.1; cs.forEach(c=>{const d=Math.hypot(c.x-w.x,c.y-w.y);if(d<bd){bd=d;best=c;}});
+  if(best){ selected=best; drag={k:'mv',o:best}; cv.setPointerCapture(ev.pointerId); return; }
+  if(Math.hypot(ball.x-w.x,ball.y-w.y)<1.1){ drag={k:'mv',o:ball}; cv.setPointerCapture(ev.pointerId); return; }
+  selected=null;
+});
+cv.addEventListener('pointermove',ev=>{
+  if(view==='fps'&&look){ eyeYaw-=(ev.clientX-look.x)*0.005; eyePitch-=(ev.clientY-look.y)*0.005; eyePitch=Math.max(-1.1,Math.min(0.5,eyePitch)); eyeYaw=Math.max(-1.6,Math.min(1.6,eyeYaw)); look={x:ev.clientX,y:ev.clientY}; return; }
+  if(!drag)return; const w=pickWorld(ev); if(!w)return;
+  if(drag.k==='rot'&&selected){ selected.th=Math.atan2(w.y-selected.y,w.x-selected.x); }
+  else { const o=drag.o; o.x=Math.max(0.3,Math.min(L-0.3,w.x)); o.y=Math.max(0.3,Math.min(Wd-0.3,w.y)); if(o.spd!==undefined){o.spd=0;o.om=0;} }
+});
+cv.addEventListener('pointerup',()=>{drag=null;look=null;}); cv.addEventListener('pointercancel',()=>{drag=null;look=null;});
 
 addEventListener('resize',resize);
-start(MODES['4v4']); resize(); requestAnimationFrame(loop);
+start(MODES['4v4']); loadHash(); resize(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>
