@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v4 - 影/選手/3mルール/拡大/共有</title>
+<title>SFC Delteas 戦術ビューア 3D v5 - 1人称修正/転がり/音/AI/シュート練習</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
@@ -32,6 +32,7 @@
   <button class="btn on" data-m="4v4">4対4 公式</button>
   <button class="btn" data-m="tac">戦術ボード</button>
   <button class="btn" data-m="2p">2人対戦</button>
+  <button class="btn" data-m="shoot">シュート練習</button>
 </div>
 <div id="score">青 0 - 0 赤</div>
 <div id="info"></div>
@@ -47,7 +48,7 @@
 </div>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v4 · 2026-06-18</div>
+<div id="ver">3D v5 · 2026-06-18</div>
 
 <script type="importmap">
 { "imports": { "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js" } }
@@ -79,12 +80,13 @@ const cv=document.getElementById('cv');
 const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.0;  // 白飛び防止
 const scene=new THREE.Scene(); scene.background=new THREE.Color(0x10131c);
-const camera=new THREE.PerspectiveCamera(50,1,0.05,400);
-scene.add(new THREE.HemisphereLight(0xffffff,0x444448,0.55));
-scene.add(new THREE.AmbientLight(0xffffff,0.35));
+const camera=new THREE.PerspectiveCamera(55,1,0.05,400);
+scene.add(new THREE.HemisphereLight(0xffffff,0x444448,0.45));
+scene.add(new THREE.AmbientLight(0xffffff,0.25));
 // 天井灯（上から）＋影
-const dl=new THREE.DirectionalLight(0xffffff,0.85); dl.position.set(4,32,8); dl.castShadow=true;
+const dl=new THREE.DirectionalLight(0xffffff,0.7); dl.position.set(4,32,8); dl.castShadow=true;
 dl.shadow.mapSize.set(2048,2048); dl.shadow.camera.near=2; dl.shadow.camera.far=90;
 dl.shadow.camera.left=-22; dl.shadow.camera.right=22; dl.shadow.camera.top=16; dl.shadow.camera.bottom=-16; dl.shadow.bias=-0.0006;
 scene.add(dl);
@@ -173,29 +175,43 @@ const ballRing=new THREE.Mesh(new THREE.TorusGeometry(3,0.05,8,48), new THREE.Me
 // 戦術：向き調整ハンドル
 const aim=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.5,12), new THREE.MeshBasicMaterial({color:0xffdd44})); aim.rotation.x=Math.PI/2; aim.visible=false; scene.add(aim);
 const ballMesh=new THREE.Mesh(new THREE.SphereGeometry(BR,22,18), new THREE.MeshStandardMaterial({map:ballTexture(),roughness:.55})); ballMesh.castShadow=true; scene.add(ballMesh);
+const rollAxis=new THREE.Vector3();
 
 // ===== 状態 =====
 let cs=[], ball, sA, sB, mode, paused=false, lastHit=null;
-let ctrlBlue=null, ctrlRed=null, lockSix=false;
+let ctrlBlue=null, ctrlRed=null, manualSel=null;
 let selected=null, zoomMode=0;        // 戦術：選択駒 / 拡大(0全体1左2右)
-let eyeYaw=0, eyePitch=-0.30;          // 1人称の視点（既定でやや下向き）
-const keys={}; let joy={x:0,y:0,active:false};
+const PRESETS=[{x:L*0.62,y:Wd/2},{x:L*0.58,y:Wd*0.30},{x:L*0.58,y:Wd*0.70},{x:L*0.72,y:Wd*0.5},{x:L*0.54,y:Wd*0.28}]; // シュート練習の配置
+let practiceI=0, practiceMade=0;
+function placeBallPreset(){ const p=PRESETS[((practiceI%PRESETS.length)+PRESETS.length)%PRESETS.length]; ball.x=p.x; ball.y=p.y; ball.vx=0; ball.vy=0; }
+let eyeYaw=0, eyePitch=-0.45;          // 1人称の視点（既定で下向き＝前方/ボールが見える）
+const keys={}; let joy={x:0,y:0,active:false}; let kickCool=0;
 
-function build(){ cs.forEach(c=>scene.remove(c.mesh)); cs=[]; const sl=slots(mode.n);
+function mkChair(team,info,sx,sy){ const mesh=makeChairMesh(team,info.n,!!info.gk); scene.add(mesh);
+  cs.push({tm:team,role:info.gk?'gk':'fp',name:info.name,num:info.n,hx:sx,hy:sy,x:sx,y:sy,th:team==='blue'?0:Math.PI,spd:0,om:0,thr:0,turn:0,mesh}); }
+function build(){ cs.forEach(c=>scene.remove(c.mesh)); cs=[]; ctrlBlue=null; ctrlRed=null; selected=null;
+  if(mode.practice){ // 攻撃(中村#6) vs 赤GK・右ゴールへシュート
+    mkChair('blue',{n:'6',name:'中村(K)'},L*0.42,Wd/2);
+    mkChair('red',{n:'1',name:'赤GK',gk:true},L*0.96,Wd/2);
+    practiceI=0; practiceMade=0; ball={x:L/2,y:Wd/2,vx:0,vy:0}; placeBallPreset(); return; }
+  const sl=slots(mode.n);
   ['blue','red'].forEach(team=>{ const lu=lineup(team,mode.n);
-    sl.forEach((s,i)=>{ const sx=team==='blue'?s.x:L-s.x; const info=lu[i]||{n:'?',name:'?'};
-      const mesh=makeChairMesh(team,info.n,!!info.gk); scene.add(mesh);
-      cs.push({tm:team,role:info.gk?'gk':'fp',name:info.name,num:info.n,hx:sx,hy:s.y,x:sx,y:s.y,th:team==='blue'?0:Math.PI,spd:0,om:0,thr:0,turn:0,mesh}); }); });
-  ball={x:L/2,y:Wd/2,vx:0,vy:0}; ctrlBlue=null; ctrlRed=null; selected=null; }
-function place(){ cs.forEach(c=>{c.x=c.hx;c.y=c.hy;c.th=c.tm==='blue'?0:Math.PI;c.spd=0;c.om=0;c.thr=0;c.turn=0;}); ball.x=L/2;ball.y=Wd/2;ball.vx=0;ball.vy=0; lastHit=null; }
+    sl.forEach((s,i)=>{ const sx=team==='blue'?s.x:L-s.x; mkChair(team, lu[i]||{n:'?',name:'?'}, sx, s.y); }); });
+  ball={x:L/2,y:Wd/2,vx:0,vy:0}; }
+function place(){ cs.forEach(c=>{c.x=c.hx;c.y=c.hy;c.th=c.tm==='blue'?0:Math.PI;c.spd=0;c.om=0;c.thr=0;c.turn=0;});
+  if(mode&&mode.practice){ placeBallPreset(); } else { ball.x=L/2;ball.y=Wd/2;ball.vx=0;ball.vy=0; } lastHit=null; }
 function start(mk){ mode=mk; sA=0;sB=0; build(); place(); paused=!!mode.tac; selected=null; zoomMode=0; document.getElementById('zoom').textContent='拡大: 全体';
+  setManual(cs.find(c=>c.tm==='blue'&&c.num==='6')||null);  // 既定で中村#6を固定操作
+  if(mode.practice){ zoomMode=2; document.getElementById('zoom').textContent='拡大: 右ゴール'; }
   document.getElementById('play').textContent=paused?'再生':'一時停止';
   [...document.querySelectorAll('#modes .btn')].forEach(b=>b.classList.toggle('on',b.dataset.m===mode.key));
-  document.getElementById('hint').textContent = mode.tac
+  document.getElementById('hint').textContent = mode.practice
+    ? 'シュート練習：配置ボールに寄って右ゴールへ。決めると次の配置へ。一時停止中はボールをドラッグで好きな位置に'
+    : mode.tac
     ? '戦術：駒/ボールをドラッグで移動・前方の黄コーンをドラッグで向き変更。水色=ボール半径3m。3m内に同色2台＝赤(2対1反則)、1台のみ=緑'
     : (mode.twoP? '1P=スティック/WASD ／ 2P=↑↓←→'
-    : 'スティック/WASD/↑↓←→で操作。回して端で叩く=スピンキック'); }
-const MODES={'1v1':{key:'1v1',n:1},'3v3':{key:'3v3',n:3},'4v4':{key:'4v4',n:4},'tac':{key:'tac',n:4,tac:true},'2p':{key:'2p',n:3,twoP:true}};
+    : 'スティック/WASD/↑↓←→で操作。青機体タップで操作交代。回して端で叩く=スピンキック'); }
+const MODES={'1v1':{key:'1v1',n:1},'3v3':{key:'3v3',n:3},'4v4':{key:'4v4',n:4},'tac':{key:'tac',n:4,tac:true},'2p':{key:'2p',n:3,twoP:true},'shoot':{key:'shoot',n:1,practice:true}};
 
 // ===== 物理 =====
 function nA(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
@@ -234,19 +250,24 @@ function sep(){ for(let i=0;i<cs.length;i++)for(let k=i+1;k<cs.length;k++){const
 function dist(c){return Math.hypot(ball.x-c.x,ball.y-c.y);}
 function inOwnBox(c){ const yIn=c.y>Wd/2-PB_HALF&&c.y<Wd/2+PB_HALF; return c.tm==='blue'?(c.x<PB_DEPTH&&yIn):(c.x>L-PB_DEPTH&&yIn); }
 function pickControlled(team,cur){
-  if(team==='blue'&&lockSix){ const six=cs.find(c=>c.tm==='blue'&&c.num==='6'); if(six)return six; }
+  if(team==='blue'&&manualSel&&cs.indexOf(manualSel)>=0) return manualSel;  // 選んだ機体に固定
   let near=null,nd=1e9; cs.forEach(c=>{if(c.tm!==team||(c.role==='gk'&&mode.n>1))return; const d=dist(c); if(d<nd){nd=d;near=c;}});
   if(!cur||cs.indexOf(cur)<0) return near;
   if(near&&near!==cur&&nd<dist(cur)-0.8) return near; return cur;
 }
+function setManual(sel){ manualSel=sel; const b=document.getElementById('lock'); if(b) b.textContent='操作: '+(sel?('#'+sel.num+(sel.num==='6'?' 中村':'')):'自動'); }
 function chaser(team){ let best=null,bd=1e9; cs.forEach(c=>{if(c.tm!==team||c.role==='gk')return; const d=dist(c); if(d<bd){bd=d;best=c;}}); return best||cs.find(c=>c.tm===team); }
-function aiSteer(c,tx,ty,stop){ const ang=Math.atan2(ty-c.y,tx-c.x),diff=nA(ang-c.th);
-  c.turn=Math.max(-1,Math.min(1,diff*1.6)); c.thr=(Math.abs(diff)<0.7&&Math.hypot(tx-c.x,ty-c.y)>(stop||0.5))?1:0; }
+function aiSteer(c,tx,ty,stop){ const dx=tx-c.x,dy=ty-c.y,d=Math.hypot(dx,dy),ang=Math.atan2(dy,dx),diff=nA(ang-c.th);
+  if(d<(stop||0.4)){ c.thr=0; c.turn=Math.max(-1,Math.min(1,diff*1.2)); return; }
+  if(Math.abs(diff)>2.0){ c.thr=-0.8; c.turn=Math.max(-1,Math.min(1,nA(ang-Math.PI-c.th)*1.8)); }      // 後方=バックで寄せる
+  else { c.turn=Math.max(-1,Math.min(1,diff*1.8)); c.thr=Math.abs(diff)<0.9?Math.min(1,0.45+d*0.25):0.15; } }
 function ai(c,chB,chR){ const ch=c.tm==='blue'?chB:chR;
-  if(c.role==='gk'&&mode.n>1){ const gx=c.tm==='blue'?L*0.05:L*0.95, gy=Math.max(gTop+0.5,Math.min(gBot-0.5,ball.y)); aiSteer(c,gx,gy,0.3); return; }
-  if(c===ch){ const og=c.tm==='blue'?{x:L,y:Wd/2}:{x:0,y:Wd/2}; let dx=ball.x-og.x,dy=ball.y-og.y,dl=Math.hypot(dx,dy)||1;
-    aiSteer(c, ball.x+dx/dl*(HX+GUARD+BR+0.3), ball.y+dy/dl*(HX+GUARD+BR+0.3), 0.25); return; }
-  aiSteer(c, c.hx, Math.max(1,Math.min(Wd-1,c.hy*0.5+ball.y*0.5)), 0.6); }
+  const ownGoal=c.tm==='blue'?{x:0,y:Wd/2}:{x:L,y:Wd/2}, oppGoal=c.tm==='blue'?{x:L,y:Wd/2}:{x:0,y:Wd/2};
+  if(c.role==='gk'&&mode.n>1){ const gx=c.tm==='blue'?L*0.04:L*0.96, gy=Math.max(gTop+0.4,Math.min(gBot-0.4,ball.y)); aiSteer(c,gx,gy,0.25); return; }
+  if(c===ch){ let dx=ball.x-oppGoal.x,dy=ball.y-oppGoal.y,dl=Math.hypot(dx,dy)||1;                       // 攻撃=ゴール側から押し込む
+    aiSteer(c, ball.x+dx/dl*(HX+GUARD+BR+0.25), ball.y+dy/dl*(HX+GUARD+BR+0.25), 0.2); return; }
+  const tX=ownGoal.x+(ball.x-ownGoal.x)*0.55, tY=ball.y*0.6+c.hy*0.4;                                    // 守備=自ゴール側でマーク
+  aiSteer(c, tX, Math.max(1,Math.min(Wd-1,tY)), 0.5); }
 
 function humanInput(){ let thr=0,turn=0;
   if(joy.active){ const m=Math.hypot(joy.x,joy.y); if(m>=0.08){ const adj=Math.min(1,(m-0.08)/0.92), r=Math.pow(adj,1.7)/m; thr=-joy.y*r; turn=joy.x*r; } }
@@ -262,12 +283,21 @@ function step(dt){
   cs.forEach(c=>updChair(c,dt)); sep();
   ball.x+=ball.vx*dt; ball.y+=ball.vy*dt;
   const sp=Math.hypot(ball.vx,ball.vy); if(sp>0){const ns=Math.max(0,sp-BDEC*dt);ball.vx*=ns/sp;ball.vy*=ns/sp;}
+  const preSp=Math.hypot(ball.vx,ball.vy);
   cs.forEach(resolve);
+  const postSp=Math.hypot(ball.vx,ball.vy);
+  if(postSp-preSp>0.8&&kickCool<=0){ playKick(postSp-preSp); kickCool=0.09; }
+  if(kickCool>0)kickCool-=dt;
   // ゴール ＆ ライン外＝出た地点で停止して再スタート
-  if(ball.x-BR<0){ if(ball.y>gTop&&ball.y<gBot){sA++;place();return;} ball.x=BR+0.02; ball.vx=0;ball.vy=0; }
-  if(ball.x+BR>L){ if(ball.y>gTop&&ball.y<gBot){sB++;place();return;} ball.x=L-BR-0.02; ball.vx=0;ball.vy=0; }
-  if(ball.y-BR<0){ ball.y=BR+0.02; ball.vx=0;ball.vy=0; }
-  if(ball.y+BR>Wd){ ball.y=Wd-BR-0.02; ball.vx=0;ball.vy=0; }
+  if(mode.practice){
+    if(ball.x+BR>L && ball.y>gTop && ball.y<gBot){ practiceMade++; practiceI++; placeBallPreset(); if(lastHit)lastHit.t-=dt; return; }   // 決めたら次の配置
+    if(ball.x+BR>L||ball.x-BR<0||ball.y-BR<0||ball.y+BR>Wd){ placeBallPreset(); if(lastHit)lastHit.t-=dt; return; }                       // 外したら同じ位置で再挑戦
+  } else {
+    if(ball.x-BR<0){ if(ball.y>gTop&&ball.y<gBot){sA++;place();return;} ball.x=BR+0.02; ball.vx=0;ball.vy=0; }
+    if(ball.x+BR>L){ if(ball.y>gTop&&ball.y<gBot){sB++;place();return;} ball.x=L-BR-0.02; ball.vx=0;ball.vy=0; }
+    if(ball.y-BR<0){ ball.y=BR+0.02; ball.vx=0;ball.vy=0; }
+    if(ball.y+BR>Wd){ ball.y=Wd-BR-0.02; ball.vx=0;ball.vy=0; }
+  }
   if(lastHit)lastHit.t-=dt;
 }
 
@@ -286,13 +316,13 @@ function updateRule(){ // 戦術ボードの3mルール可視化
 function syncMeshes(){
   cs.forEach(c=>{ c.mesh.position.set(mX(c.x),0,mZ(c.y)); c.mesh.rotation.y=-c.th;
     if(c.mesh.userData.person) c.mesh.userData.person.visible=!(view==='fps'&&c===ctrlBlue); });
-  ballMesh.position.set(mX(ball.x),BR,mZ(ball.y)); ballMesh.rotation.y-=0.04;
+  ballMesh.position.set(mX(ball.x),BR,mZ(ball.y));
   ringB.visible=!!ctrlBlue&&view!=='fps'; if(ctrlBlue)ringB.position.set(mX(ctrlBlue.x),0.06,mZ(ctrlBlue.y));
   ringR.visible=!!ctrlRed&&view!=='fps'; if(ctrlRed)ringR.position.set(mX(ctrlRed.x),0.06,mZ(ctrlRed.y));
   const tac=!!(mode&&mode.tac);
   aim.visible=tac&&!!selected; if(tac&&selected){ aim.position.set(mX(selected.x+Math.cos(selected.th)*1.5),0.3,mZ(selected.y+Math.sin(selected.th)*1.5)); aim.rotation.set(Math.PI/2,0,-selected.th-Math.PI/2); }
   updateRule();
-  document.getElementById('score').textContent='青 '+sA+' - '+sB+' 赤   '+mode.n+'対'+mode.n;
+  document.getElementById('score').textContent = mode.practice ? ('シュート練習　成功 '+practiceMade+' 本') : ('青 '+sA+' - '+sB+' 赤   '+mode.n+'対'+mode.n);
   if(tac&&selected){ const d=dist(selected).toFixed(1); document.getElementById('info').innerHTML='選択: #'+selected.num+' '+selected.name+'<br>ボールまで '+d+' m '+(selected.role==='gk'&&inOwnBox(selected)?'(GK例外)':(dist(selected)<3?'(3m内)':'(3m外)'))+'<br>向き調整=黄コーンをドラッグ'; }
   else { const c=ctrlBlue; if(c)document.getElementById('info').innerHTML='操作: #'+c.num+' '+c.name+'<br>車速 '+Math.abs(c.spd).toFixed(1)+' m/s<br>回転 '+c.om.toFixed(1)+' rad/s<br>ボール '+Math.hypot(ball.vx,ball.vy).toFixed(1)+' m/s'; }
 }
@@ -300,11 +330,12 @@ function syncMeshes(){
 // ===== カメラ =====
 let view='over', orient='land';
 function updateCamera(){
-  const zt=(mode&&mode.tac&&zoomMode)?(zoomMode===1?-L/4:L/4):0; const z=zt!==0;
-  if(view==='fps'&&ctrlBlue){ const c=ctrlBlue, yaw=c.th+eyeYaw, pit=eyePitch;
-    const ex=mX(c.x)-Math.cos(c.th)*0.12, ez=mZ(c.y)-Math.sin(c.th)*0.12, ey=1.3;
+  const zt=(mode&&(mode.tac||mode.practice)&&zoomMode)?(zoomMode===1?-L/4:L/4):0; const z=zt!==0;
+  if(view==='fps'&&ctrlBlue){ const c=ctrlBlue, yaw=c.th+eyeYaw;
+    const ex=mX(c.x)-Math.cos(c.th)*0.05, ez=mZ(c.y)-Math.sin(c.th)*0.05, ey=1.35;
     camera.up.set(0,1,0); camera.position.set(ex,ey,ez);
-    camera.lookAt(ex+Math.cos(yaw)*Math.cos(pit)*6, ey+Math.sin(pit)*6, ez+Math.sin(yaw)*Math.cos(pit)*6);
+    const D=4, tx=ex+Math.cos(yaw)*D, tz=ez+Math.sin(yaw)*D, ty=ey+Math.tan(eyePitch)*D;
+    camera.lookAt(tx,ty,tz);
   } else if(view==='top'){ camera.up.set(orient==='land'?0:-1,0,orient==='land'?-1:0);
     camera.position.set(zt,z?20:34,0.001); camera.lookAt(zt,0,0);
   } else { const az=orient==='land'?0:Math.PI/2, r=z?12:21, h=z?15:24; camera.up.set(0,1,0);
@@ -312,10 +343,36 @@ function updateCamera(){
 }
 function resize(){ const w=cv.clientWidth,h=cv.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
 
+// ===== サウンド（Web Audio合成・ファイル不要）=====
+let ac=null, motorGain=null, mOsc=null, mOsc2=null;
+function initAudio(){ if(ac){ if(ac.state==='suspended')ac.resume(); return; }
+  try{ ac=new (window.AudioContext||window.webkitAudioContext)();
+    motorGain=ac.createGain(); motorGain.gain.value=0;
+    const f=ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=520;
+    mOsc=ac.createOscillator(); mOsc.type='sawtooth'; mOsc.frequency.value=70;
+    mOsc2=ac.createOscillator(); mOsc2.type='square'; mOsc2.frequency.value=140;
+    mOsc.connect(f); mOsc2.connect(f); f.connect(motorGain); motorGain.connect(ac.destination);
+    mOsc.start(); mOsc2.start();
+  }catch(e){ ac=null; } }
+addEventListener('pointerdown',initAudio); addEventListener('keydown',initAudio);
+function motorAudio(){ if(!ac||!motorGain)return; const c=ctrlBlue; const drive=c?Math.min(1,Math.abs(c.spd)/SPEED+Math.abs(c.om)/MO*0.5):0;
+  motorGain.gain.setTargetAtTime(0.0004+drive*0.045, ac.currentTime, 0.05);
+  const fr=58+drive*120; mOsc.frequency.setTargetAtTime(fr,ac.currentTime,0.05); mOsc2.frequency.setTargetAtTime(fr*2,ac.currentTime,0.05); }
+function playKick(strength){ if(!ac)return; const t=ac.currentTime, v=Math.min(1,strength/4), dur=0.1+v*0.06;
+  const n=Math.floor(ac.sampleRate*dur), buf=ac.createBuffer(1,n,ac.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
+  const src=ac.createBufferSource(); src.buffer=buf; const bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=240+v*500; bp.Q.value=0.9;
+  const ng=ac.createGain(); ng.gain.value=0.12+v*0.5; src.connect(bp); bp.connect(ng); ng.connect(ac.destination); src.start(t);
+  const osc=ac.createOscillator(); osc.type='sine'; osc.frequency.setValueAtTime(130+v*130,t); osc.frequency.exponentialRampToValueAtTime(55,t+dur);
+  const og=ac.createGain(); og.gain.setValueAtTime(0.18+v*0.45,t); og.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  osc.connect(og); og.connect(ac.destination); osc.start(t); osc.stop(t+dur+0.02); }
+
 const hstep=1/120; let acc=0, last=performance.now();
 function loop(t){ let dt=(t-last)/1000; last=t; dt=Math.min(dt,0.05);
   if(!paused){acc+=dt;let n=0;while(acc>=hstep&&n<8){step(hstep);acc-=hstep;n++;}}
-  syncMeshes(); updateCamera(); renderer.render(scene,camera); requestAnimationFrame(loop); }
+  // ボールの転がり：速度ベクトルに直交する水平軸まわりに |v|/r で回転（停止中は回らない）
+  { const sp=Math.hypot(ball.vx,ball.vy); if(sp>1e-3){ rollAxis.set(ball.vy,0,-ball.vx).normalize(); ballMesh.rotateOnWorldAxis(rollAxis, sp*dt/BR); } }
+  motorAudio(); syncMeshes(); updateCamera(); renderer.render(scene,camera); requestAnimationFrame(loop); }
 
 // ===== 入力 =====
 addEventListener('keydown',e=>{const k=e.key.toLowerCase(); if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){keys[k]=true;e.preventDefault();}});
@@ -334,7 +391,7 @@ document.getElementById('reset').addEventListener('click',()=>place());
 document.getElementById('orient').addEventListener('click',function(){orient=orient==='land'?'port':'land';this.textContent=orient==='land'?'縦型にする':'横型にする';});
 const VIEWS=['top','over','fps'], VLAB={top:'真上',over:'斜め',fps:'1人称'};
 document.getElementById('view').addEventListener('click',function(){ view=VIEWS[(VIEWS.indexOf(view)+1)%VIEWS.length]; this.textContent='視点: '+VLAB[view]; });
-document.getElementById('lock').addEventListener('click',function(){lockSix=!lockSix;this.textContent='操作: '+(lockSix?'#6固定':'自動');});
+document.getElementById('lock').addEventListener('click',function(){ const list=cs.filter(c=>c.tm==='blue'); let idx=manualSel?list.indexOf(manualSel):-1; idx++; setManual(idx>=list.length?null:list[idx]); });
 document.getElementById('zoom').addEventListener('click',function(){ zoomMode=(zoomMode+1)%3; this.textContent='拡大: '+['全体','左ゴール','右ゴール'][zoomMode]; });
 
 // ===== 共有（オンライン同期の下準備）=====
@@ -355,7 +412,10 @@ function pickWorld(ev){ const r=cv.getBoundingClientRect(); ndc.x=((ev.clientX-r
   return hit?{x:hit.x+L/2,y:hit.z+Wd/2}:null; }
 cv.addEventListener('pointerdown',ev=>{
   if(view==='fps'){ look={x:ev.clientX,y:ev.clientY}; cv.setPointerCapture(ev.pointerId); return; }
-  if(!(paused&&mode.tac))return; const w=pickWorld(ev); if(!w)return;
+  if(!(paused&&(mode.tac||mode.practice))){ // 通常プレイ：青機体をタップで操作対象に固定
+    const w=pickWorld(ev); if(w){ let best=null,bd=1.4; cs.forEach(c=>{if(c.tm!=='blue')return; const d=Math.hypot(c.x-w.x,c.y-w.y); if(d<bd){bd=d;best=c;}}); if(best)setManual(best); }
+    return; }
+  const w=pickWorld(ev); if(!w)return;
   if(selected){ const hx=selected.x+Math.cos(selected.th)*1.5, hy=selected.y+Math.sin(selected.th)*1.5;
     if(Math.hypot(hx-w.x,hy-w.y)<0.85){ drag={k:'rot'}; cv.setPointerCapture(ev.pointerId); return; } }
   let best=null,bd=1.1; cs.forEach(c=>{const d=Math.hypot(c.x-w.x,c.y-w.y);if(d<bd){bd=d;best=c;}});
