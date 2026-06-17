@@ -6,22 +6,31 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v5 - 1人称修正/転がり/音/AI/シュート練習</title>
+<title>SFC Delteas 戦術ビューア 3D v6 - タイトル/緑/前方視界/距離AI/パス回転</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
   #wrap{position:fixed;inset:0;}#cv{display:block;width:100%;height:100%;touch-action:none;}
   .top{position:fixed;top:8px;left:0;right:0;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;z-index:10;padding:0 8px;}
   .btn{font:14px/1 inherit;border:1px solid rgba(255,255,255,.25);background:rgba(20,20,30,.7);color:#fff;border-radius:9px;padding:9px 12px;cursor:pointer;}
-  .btn.on{background:#2f6fd6;border-color:#2f6fd6;}.btn:active{transform:scale(.96);}
+  .btn.on{background:#2d8a3d;border-color:#2d8a3d;}.btn:active{transform:scale(.96);}
   #score{position:fixed;top:54px;left:0;right:0;text-align:center;font-size:20px;font-weight:600;z-index:10;text-shadow:0 1px 3px #000;}
   #info{position:fixed;top:84px;left:10px;font:12px/1.5 monospace;background:rgba(0,0,0,.45);padding:6px 9px;border-radius:6px;z-index:10;max-width:230px;}
   #hint{position:fixed;bottom:150px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.78);z-index:9;text-shadow:0 1px 2px #000;padding:0 10px;}
   .ctl{position:fixed;bottom:14px;left:0;right:0;display:flex;justify-content:center;gap:6px;z-index:11;flex-wrap:wrap;padding:0 8px;}
   #ver{position:fixed;right:6px;bottom:54px;z-index:11;font:11px/1 monospace;color:#fff;background:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px;}
   #joy{position:fixed;right:24px;bottom:70px;width:128px;height:128px;border-radius:50%;background:rgba(40,40,55,.45);border:2px solid rgba(255,255,255,.3);z-index:12;touch-action:none;}
-  #knob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:rgba(47,111,214,.85);border:2px solid #fff;}
+  #knob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:rgba(45,138,61,.85);border:2px solid #fff;}
   #joyLabel{position:fixed;right:42px;bottom:200px;font-size:11px;color:rgba(255,255,255,.6);z-index:12;}
+  #title{position:fixed;inset:0;z-index:50;background:rgba(8,10,18,.97);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;}
+  #title .emblem{width:84px;height:84px;border-radius:50%;background:#2d8a3d;color:#fff;font-size:44px;font-weight:700;display:flex;align-items:center;justify-content:center;border:3px solid #6fce7e;margin-bottom:18px;}
+  #title .tt-sub{font-size:13px;letter-spacing:4px;color:#6fce7e;}
+  #title .tt-main{font-size:30px;font-weight:700;margin-top:6px;}
+  #title .tt-main span{color:#6fce7e;}
+  #title .tt-ver{font-size:14px;color:rgba(255,255,255,.55);margin:10px 0 26px;}
+  #title #startBtn{font:600 18px inherit;padding:14px 44px;border-radius:12px;border:none;background:#2d8a3d;color:#fff;cursor:pointer;}
+  #title #startBtn:active{transform:scale(.97);}
+  #title .tt-note{font-size:12px;color:rgba(255,255,255,.45);margin-top:18px;}
 </style>
 </head>
 <body>
@@ -33,6 +42,7 @@
   <button class="btn" data-m="tac">戦術ボード</button>
   <button class="btn" data-m="2p">2人対戦</button>
   <button class="btn" data-m="shoot">シュート練習</button>
+  <button class="btn" data-m="shoot2">パス&回転</button>
 </div>
 <div id="score">青 0 - 0 赤</div>
 <div id="info"></div>
@@ -48,7 +58,15 @@
 </div>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v5 · 2026-06-18</div>
+<div id="ver">3D v6 · 2026-06-18</div>
+<div id="title">
+  <div class="emblem">D</div>
+  <div class="tt-sub">POWERCHAIR FOOTBALL</div>
+  <div class="tt-main">SFC Delteas <span>戦術ビューア</span></div>
+  <div class="tt-ver">3D v6 ・ 電動車椅子サッカー</div>
+  <button id="startBtn">スタート</button>
+  <div class="tt-note">クリック／タップで開始（音が有効になります）</div>
+</div>
 
 <script type="importmap">
 { "imports": { "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js" } }
@@ -122,7 +140,7 @@ function timerTex(){ const c=document.createElement('canvas'); c.width=256;c.hei
   function bench(cx,teamCol){ const b=new THREE.Mesh(new THREE.BoxGeometry(4,0.1,0.5), new THREE.MeshStandardMaterial({color:0x6b4423})); b.position.set(cx,0.42,OFFZ-0.1); scene.add(b);
     person(0x222222,cx-1.5,OFFZ-0.3); person(teamCol,cx-0.3,OFFZ-0.3); person(teamCol,cx+0.9,OFFZ-0.3);
     chairProp(teamCol,cx+0.2,OFFZ+1.0); chairProp(teamCol,cx+1.6,OFFZ+1.0); }
-  bench(7,0x2f6fd6); bench(-7,0xd24a45);
+  bench(7,0x2d8a3d); bench(-7,0xd24a45);
   person(0xffd000,0,Wd/2+1.4,Math.PI); person(0xffd000,-9,Wd/2+1.2,Math.PI); person(0xffd000,9,Wd/2+1.2,Math.PI);
   const cols=[0x884444,0x446688,0x668844,0x886644,0x555577,0x775555];
   function crowd(z,rows,dir){ for(let r=0;r<rows;r++)for(let i=-11;i<=11;i+=2){ const c=cols[(Math.abs(Math.round(i))+r)%cols.length]; person(c,i+(r%2?1:0),z+dir*r*1.2,0); } }
@@ -136,14 +154,14 @@ function courtTexture(){ const c=document.createElement('canvas'); const S=40; c
   x.strokeStyle='rgba(255,255,255,.95)'; x.lineWidth=5; x.strokeRect(10,10,c.width-20,c.height-20);
   x.beginPath(); x.moveTo(c.width/2,10); x.lineTo(c.width/2,c.height-10); x.stroke();
   x.beginPath(); x.arc(c.width/2,c.height/2,3*S,0,7); x.stroke();
-  x.lineWidth=4; x.strokeStyle='rgba(60,120,200,.65)'; x.strokeRect(10,(Wd/2-PB_HALF)*S,PB_DEPTH*S,PB_HALF*2*S);
+  x.lineWidth=4; x.strokeStyle='rgba(45,138,61,.7)'; x.strokeRect(10,(Wd/2-PB_HALF)*S,PB_DEPTH*S,PB_HALF*2*S);
   x.strokeStyle='rgba(210,74,69,.65)'; x.strokeRect(c.width-10-PB_DEPTH*S,(Wd/2-PB_HALF)*S,PB_DEPTH*S,PB_HALF*2*S);
   const t=new THREE.CanvasTexture(c); t.anisotropy=4; return t; }
 const courtFloor=new THREE.Mesh(new THREE.PlaneGeometry(L,Wd), new THREE.MeshStandardMaterial({map:courtTexture(),roughness:.9}));
 courtFloor.rotation.x=-Math.PI/2; courtFloor.position.y=0.005; courtFloor.receiveShadow=true; scene.add(courtFloor);
 function goal(xEnd,color){ const mat=new THREE.MeshStandardMaterial({color});
   [gTop,gBot].forEach(z=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,1.2,10),mat); p.position.set(xEnd-L/2,.6,z-Wd/2); p.castShadow=true; scene.add(p); }); }
-goal(0,0x2f6fd6); goal(L,0xd24a45);
+goal(0,0x2d8a3d); goal(L,0xd24a45);
 
 // ボール（白＋黒パネルで視認性UP・実寸32.5cm）＋影
 function ballTexture(){ const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d');
@@ -155,14 +173,14 @@ function numberSprite(txt,bg){ const c=document.createElement('canvas'); c.width
   x.fillStyle=bg; x.beginPath(); x.arc(32,32,30,0,7); x.fill(); x.lineWidth=3; x.strokeStyle='#fff'; x.stroke();
   x.fillStyle='#fff'; x.font='bold 34px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(txt,32,34);
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false})); return s; }
-function makeChairMesh(team,label,gk){ const g=new THREE.Group();
-  const col=team==='blue'?0x2f6fd6:0xd24a45, dk=team==='blue'?0x17407f:0x8a2723;
-  const body=new THREE.Mesh(new THREE.BoxGeometry(2*HX,0.4,2*HY), new THREE.MeshStandardMaterial({color:gk?(team==='blue'?0x6fa8ff:0xff8f8a):0x2a2a30,roughness:.7})); body.position.y=0.28; g.add(body);
+function tcol(team){ return team==='blue'?{c:0x2d8a3d,d:0x1b5a28,l:0x6fce7e}:{c:0xd24a45,d:0x8a2723,l:0xff8f8a}; } // 緑=SFCデルティーズ / 赤=相手
+function makeChairMesh(team,label,gk){ const g=new THREE.Group(); const T=tcol(team), col=T.c, dk=T.d;
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2*HX,0.4,2*HY), new THREE.MeshStandardMaterial({color:gk?T.l:col,roughness:.7})); body.position.y=0.28; g.add(body);
   const guard=new THREE.Mesh(new THREE.BoxGeometry(GUARD*1.6,0.46,2*HY+0.1), new THREE.MeshStandardMaterial({color:dk})); guard.position.set(HX+GUARD*0.5,0.26,0); g.add(guard);
   // 後輪上に着座した選手（観客と同じデザイン・チームシャツ）
-  const pg=makePerson(gk?(team==='blue'?0x6fa8ff:0xff8f8a):col); pg.position.set(-HX*0.18,0.16,0); g.add(pg); g.userData.person=pg;
+  const pg=makePerson(gk?T.l:col); pg.position.set(-HX*0.18,0.16,0); g.add(pg); g.userData.person=pg;
   // 番号は選手の胸あたり（小さめ）
-  const spr=numberSprite(label,dk); spr.scale.set(0.62,0.62,0.62); spr.position.set(-HX*0.18,1.02,0); g.add(spr);
+  const spr=numberSprite(label,dk); spr.scale.set(0.62,0.62,0.62); spr.position.set(-HX*0.18,1.02,0); g.add(spr); g.userData.sprite=spr;
   // 状態リング（戦術ボードの3mルール表示用・既定は非表示）
   const sr=new THREE.Mesh(new THREE.TorusGeometry(0.95,0.06,8,28), new THREE.MeshBasicMaterial({color:0x39d353})); sr.rotation.x=-Math.PI/2; sr.position.y=0.04; sr.visible=false; g.add(sr); g.userData.statusRing=sr;
   g.traverse(o=>{ if(o.isMesh&&o!==sr)o.castShadow=true; });
@@ -181,9 +199,14 @@ const rollAxis=new THREE.Vector3();
 let cs=[], ball, sA, sB, mode, paused=false, lastHit=null;
 let ctrlBlue=null, ctrlRed=null, manualSel=null;
 let selected=null, zoomMode=0;        // 戦術：選択駒 / 拡大(0全体1左2右)
-const PRESETS=[{x:L*0.62,y:Wd/2},{x:L*0.58,y:Wd*0.30},{x:L*0.58,y:Wd*0.70},{x:L*0.72,y:Wd*0.5},{x:L*0.54,y:Wd*0.28}]; // シュート練習の配置
+const PRESETS=[{x:L*0.62,y:Wd/2},{x:L*0.58,y:Wd*0.30},{x:L*0.58,y:Wd*0.70},{x:L*0.72,y:Wd*0.5},{x:L*0.54,y:Wd*0.28}]; // 置きシュートの配置
+const PASS_ORIGINS=[{x:L*0.5,y:1.6},{x:L*0.55,y:Wd-1.6},{x:L*0.46,y:1.6},{x:L*0.6,y:Wd-1.6}];                          // パスの出し元
 let practiceI=0, practiceMade=0;
-function placeBallPreset(){ const p=PRESETS[((practiceI%PRESETS.length)+PRESETS.length)%PRESETS.length]; ball.x=p.x; ball.y=p.y; ball.vx=0; ball.vy=0; }
+function placeBallPreset(){
+  if(mode&&mode.ptype==='pass'){ const o=PASS_ORIGINS[((practiceI%PASS_ORIGINS.length)+PASS_ORIGINS.length)%PASS_ORIGINS.length];
+    ball.x=o.x; ball.y=o.y; const att=cs.find(c=>c.tm==='blue'); const tx=att?att.x:L*0.5, ty=att?att.y:Wd/2;
+    let dx=tx-o.x, dy=ty-o.y, d=Math.hypot(dx,dy)||1, sp=3.2; ball.vx=dx/d*sp; ball.vy=dy/d*sp; return; }   // 選手へパス
+  const p=PRESETS[((practiceI%PRESETS.length)+PRESETS.length)%PRESETS.length]; ball.x=p.x; ball.y=p.y; ball.vx=0; ball.vy=0; }
 let eyeYaw=0, eyePitch=-0.45;          // 1人称の視点（既定で下向き＝前方/ボールが見える）
 const keys={}; let joy={x:0,y:0,active:false}; let kickCool=0;
 
@@ -206,12 +229,13 @@ function start(mk){ mode=mk; sA=0;sB=0; build(); place(); paused=!!mode.tac; sel
   document.getElementById('play').textContent=paused?'再生':'一時停止';
   [...document.querySelectorAll('#modes .btn')].forEach(b=>b.classList.toggle('on',b.dataset.m===mode.key));
   document.getElementById('hint').textContent = mode.practice
-    ? 'シュート練習：配置ボールに寄って右ゴールへ。決めると次の配置へ。一時停止中はボールをドラッグで好きな位置に'
+    ? (mode.ptype==='pass' ? 'パス&回転シュート：転がってくるボールを受けて、回して右ゴールへ。GKは動きません。決めると次へ'
+       : 'シュート練習：配置ボールに寄って右ゴールへ。GKは動きません。決めると次の配置へ。一時停止中はボールをドラッグで配置')
     : mode.tac
     ? '戦術：駒/ボールをドラッグで移動・前方の黄コーンをドラッグで向き変更。水色=ボール半径3m。3m内に同色2台＝赤(2対1反則)、1台のみ=緑'
     : (mode.twoP? '1P=スティック/WASD ／ 2P=↑↓←→'
-    : 'スティック/WASD/↑↓←→で操作。青機体タップで操作交代。回して端で叩く=スピンキック'); }
-const MODES={'1v1':{key:'1v1',n:1},'3v3':{key:'3v3',n:3},'4v4':{key:'4v4',n:4},'tac':{key:'tac',n:4,tac:true},'2p':{key:'2p',n:3,twoP:true},'shoot':{key:'shoot',n:1,practice:true}};
+    : 'スティック/WASD/↑↓←→で操作。緑機体タップで操作交代。回して端で叩く=スピンキック'); }
+const MODES={'1v1':{key:'1v1',n:1},'3v3':{key:'3v3',n:3},'4v4':{key:'4v4',n:4},'tac':{key:'tac',n:4,tac:true},'2p':{key:'2p',n:3,twoP:true},'shoot':{key:'shoot',n:1,practice:true,ptype:'place'},'shoot2':{key:'shoot2',n:1,practice:true,ptype:'pass'}};
 
 // ===== 物理 =====
 function nA(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
@@ -262,12 +286,14 @@ function aiSteer(c,tx,ty,stop){ const dx=tx-c.x,dy=ty-c.y,d=Math.hypot(dx,dy),an
   if(Math.abs(diff)>2.0){ c.thr=-0.8; c.turn=Math.max(-1,Math.min(1,nA(ang-Math.PI-c.th)*1.8)); }      // 後方=バックで寄せる
   else { c.turn=Math.max(-1,Math.min(1,diff*1.8)); c.thr=Math.abs(diff)<0.9?Math.min(1,0.45+d*0.25):0.15; } }
 function ai(c,chB,chR){ const ch=c.tm==='blue'?chB:chR;
-  const ownGoal=c.tm==='blue'?{x:0,y:Wd/2}:{x:L,y:Wd/2}, oppGoal=c.tm==='blue'?{x:L,y:Wd/2}:{x:0,y:Wd/2};
+  if(mode.practice&&c.tm==='red'){ c.thr=0; c.turn=0; return; }   // 練習のGKは動かない
+  const ownGoal=c.tm==='blue'?{x:0,y:Wd/2}:{x:L,y:Wd/2};
   if(c.role==='gk'&&mode.n>1){ const gx=c.tm==='blue'?L*0.04:L*0.96, gy=Math.max(gTop+0.4,Math.min(gBot-0.4,ball.y)); aiSteer(c,gx,gy,0.25); return; }
-  if(c===ch){ let dx=ball.x-oppGoal.x,dy=ball.y-oppGoal.y,dl=Math.hypot(dx,dy)||1;                       // 攻撃=ゴール側から押し込む
-    aiSteer(c, ball.x+dx/dl*(HX+GUARD+BR+0.25), ball.y+dy/dl*(HX+GUARD+BR+0.25), 0.2); return; }
-  const tX=ownGoal.x+(ball.x-ownGoal.x)*0.55, tY=ball.y*0.6+c.hy*0.4;                                    // 守備=自ゴール側でマーク
-  aiSteer(c, tX, Math.max(1,Math.min(Wd-1,tY)), 0.5); }
+  if(c===ch){ // ボールに張り付かず、自ゴール側に約2.2m離れてマーク（操作スペースを残す）
+    let gx=ownGoal.x-ball.x, gy=ownGoal.y-ball.y, gl=Math.hypot(gx,gy)||1; const mark=2.2;
+    aiSteer(c, ball.x+gx/gl*mark, ball.y+gy/gl*mark, 0.7); return; }
+  const tX=ownGoal.x+(ball.x-ownGoal.x)*0.55, tY=ball.y*0.6+c.hy*0.4;
+  aiSteer(c, tX, Math.max(1,Math.min(Wd-1,tY)), 0.8); }
 
 function humanInput(){ let thr=0,turn=0;
   if(joy.active){ const m=Math.hypot(joy.x,joy.y); if(m>=0.08){ const adj=Math.min(1,(m-0.08)/0.92), r=Math.pow(adj,1.7)/m; thr=-joy.y*r; turn=joy.x*r; } }
@@ -315,14 +341,14 @@ function updateRule(){ // 戦術ボードの3mルール可視化
 }
 function syncMeshes(){
   cs.forEach(c=>{ c.mesh.position.set(mX(c.x),0,mZ(c.y)); c.mesh.rotation.y=-c.th;
-    if(c.mesh.userData.person) c.mesh.userData.person.visible=!(view==='fps'&&c===ctrlBlue); });
+    const hideSelf=(view==='fps'&&c===ctrlBlue); if(c.mesh.userData.person)c.mesh.userData.person.visible=!hideSelf; if(c.mesh.userData.sprite)c.mesh.userData.sprite.visible=!hideSelf; });
   ballMesh.position.set(mX(ball.x),BR,mZ(ball.y));
   ringB.visible=!!ctrlBlue&&view!=='fps'; if(ctrlBlue)ringB.position.set(mX(ctrlBlue.x),0.06,mZ(ctrlBlue.y));
   ringR.visible=!!ctrlRed&&view!=='fps'; if(ctrlRed)ringR.position.set(mX(ctrlRed.x),0.06,mZ(ctrlRed.y));
   const tac=!!(mode&&mode.tac);
   aim.visible=tac&&!!selected; if(tac&&selected){ aim.position.set(mX(selected.x+Math.cos(selected.th)*1.5),0.3,mZ(selected.y+Math.sin(selected.th)*1.5)); aim.rotation.set(Math.PI/2,0,-selected.th-Math.PI/2); }
   updateRule();
-  document.getElementById('score').textContent = mode.practice ? ('シュート練習　成功 '+practiceMade+' 本') : ('青 '+sA+' - '+sB+' 赤   '+mode.n+'対'+mode.n);
+  document.getElementById('score').textContent = mode.practice ? ((mode.ptype==='pass'?'パス&回転シュート　':'シュート練習　')+'成功 '+practiceMade+' 本') : ('緑 '+sA+' - '+sB+' 赤   '+mode.n+'対'+mode.n);
   if(tac&&selected){ const d=dist(selected).toFixed(1); document.getElementById('info').innerHTML='選択: #'+selected.num+' '+selected.name+'<br>ボールまで '+d+' m '+(selected.role==='gk'&&inOwnBox(selected)?'(GK例外)':(dist(selected)<3?'(3m内)':'(3m外)'))+'<br>向き調整=黄コーンをドラッグ'; }
   else { const c=ctrlBlue; if(c)document.getElementById('info').innerHTML='操作: #'+c.num+' '+c.name+'<br>車速 '+Math.abs(c.spd).toFixed(1)+' m/s<br>回転 '+c.om.toFixed(1)+' rad/s<br>ボール '+Math.hypot(ball.vx,ball.vy).toFixed(1)+' m/s'; }
 }
@@ -330,9 +356,10 @@ function syncMeshes(){
 // ===== カメラ =====
 let view='over', orient='land';
 function updateCamera(){
-  const zt=(mode&&(mode.tac||mode.practice)&&zoomMode)?(zoomMode===1?-L/4:L/4):0; const z=zt!==0;
+  const zt=zoomMode?(zoomMode===1?-L/4:L/4):0; const z=zt!==0;  // 拡大は全モードで有効
   if(view==='fps'&&ctrlBlue){ const c=ctrlBlue, yaw=c.th+eyeYaw;
-    const ex=mX(c.x)-Math.cos(c.th)*0.05, ez=mZ(c.y)-Math.sin(c.th)*0.05, ey=1.35;
+    // 目線を座席より少し後ろ・上に置き、常に自分の車椅子前方(ガード)が下に映るようにする
+    const ex=mX(c.x)-Math.cos(c.th)*0.55, ez=mZ(c.y)-Math.sin(c.th)*0.55, ey=1.6;
     camera.up.set(0,1,0); camera.position.set(ex,ey,ez);
     const D=4, tx=ex+Math.cos(yaw)*D, tz=ez+Math.sin(yaw)*D, ty=ey+Math.tan(eyePitch)*D;
     camera.lookAt(tx,ty,tz);
@@ -393,6 +420,7 @@ const VIEWS=['top','over','fps'], VLAB={top:'真上',over:'斜め',fps:'1人称'
 document.getElementById('view').addEventListener('click',function(){ view=VIEWS[(VIEWS.indexOf(view)+1)%VIEWS.length]; this.textContent='視点: '+VLAB[view]; });
 document.getElementById('lock').addEventListener('click',function(){ const list=cs.filter(c=>c.tm==='blue'); let idx=manualSel?list.indexOf(manualSel):-1; idx++; setManual(idx>=list.length?null:list[idx]); });
 document.getElementById('zoom').addEventListener('click',function(){ zoomMode=(zoomMode+1)%3; this.textContent='拡大: '+['全体','左ゴール','右ゴール'][zoomMode]; });
+document.getElementById('startBtn').addEventListener('click',()=>{ document.getElementById('title').style.display='none'; initAudio(); });
 
 // ===== 共有（オンライン同期の下準備）=====
 // 将来: Cloudflare Workers(WebSocket/Durable Object)で serialize() を配信し合えばリアルタイム共有可能
@@ -424,7 +452,7 @@ cv.addEventListener('pointerdown',ev=>{
   selected=null;
 });
 cv.addEventListener('pointermove',ev=>{
-  if(view==='fps'&&look){ eyeYaw-=(ev.clientX-look.x)*0.005; eyePitch-=(ev.clientY-look.y)*0.005; eyePitch=Math.max(-1.1,Math.min(0.5,eyePitch)); eyeYaw=Math.max(-1.6,Math.min(1.6,eyeYaw)); look={x:ev.clientX,y:ev.clientY}; return; }
+  if(view==='fps'&&look){ eyeYaw-=(ev.clientX-look.x)*0.005; eyePitch-=(ev.clientY-look.y)*0.005; eyePitch=Math.max(-1.0,Math.min(0.25,eyePitch)); eyeYaw=Math.max(-1.6,Math.min(1.6,eyeYaw)); look={x:ev.clientX,y:ev.clientY}; return; }
   if(!drag)return; const w=pickWorld(ev); if(!w)return;
   if(drag.k==='rot'&&selected){ selected.th=Math.atan2(w.y-selected.y,w.x-selected.x); }
   else { const o=drag.o; o.x=Math.max(0.3,Math.min(L-0.3,w.x)); o.y=Math.max(0.3,Math.min(Wd-0.3,w.y)); if(o.spd!==undefined){o.spd=0;o.om=0;} }
