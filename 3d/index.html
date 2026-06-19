@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v11 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
+<title>SFC Delteas 戦術ビューア 3D v12 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
@@ -73,12 +73,12 @@
 </div>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v11 · 2026-06-18</div>
+<div id="ver">3D v12 · 2026-06-18</div>
 <div id="title">
   <div class="emblem">D</div>
   <div class="tt-sub">POWERCHAIR FOOTBALL</div>
   <div class="tt-main">SFC Delteas <span>戦術ビューア</span></div>
-  <div class="tt-ver">3D v11 ・ 電動車椅子サッカー</div>
+  <div class="tt-ver">3D v12 ・ 電動車椅子サッカー</div>
   <button id="startBtn">スタート</button>
   <a href="../2d/" style="margin-top:14px;color:#6fce7e;font-size:14px;text-decoration:none;border:1px solid rgba(111,206,126,.5);border-radius:9px;padding:9px 18px;">🕹 シンプル2D版で遊ぶ →</a>
   <div class="tt-note">クリック／タップで開始（音が有効になります）</div>
@@ -194,16 +194,32 @@ function numberSprite(txt,bg){ const c=document.createElement('canvas'); c.width
   x.fillStyle='#fff'; x.font='bold 34px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(txt,32,34);
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false})); return s; }
 function tcol(team){ return team==='blue'?{c:0x2d8a3d,d:0x1b5a28,l:0x6fce7e}:{c:0xd24a45,d:0x8a2723,l:0xff8f8a}; } // 緑=SFCデルティーズ / 赤=相手
-function makeChairMesh(team,label,gk){ const g=new THREE.Group(); const T=tcol(team), col=T.c, dk=T.d;
-  const body=new THREE.Mesh(new THREE.BoxGeometry(2*HX,0.4,2*HY), new THREE.MeshStandardMaterial({color:gk?T.l:col,roughness:.7})); body.position.y=0.28; g.add(body);
-  const guard=new THREE.Mesh(new THREE.BoxGeometry(GUARD*1.6,0.46,2*HY+0.1), new THREE.MeshStandardMaterial({color:dk})); guard.position.set(HX+GUARD*0.5,0.26,0); g.add(guard);
-  // 後輪上に着座した選手（観客と同じデザイン・チームシャツ）
-  const pg=makePerson(gk?T.l:col); pg.position.set(-HX*0.18,0.16,0); g.add(pg); g.userData.person=pg;
-  // 番号は選手の胸あたり（小さめ）
-  const spr=numberSprite(label,dk); spr.scale.set(0.62,0.62,0.62); spr.position.set(-HX*0.18,1.02,0); g.add(spr); g.userData.sprite=spr;
-  // 状態リング（戦術ボードの3mルール表示用・既定は非表示）
+function tcube(g,mat,w,h,d,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; }
+function makeChairMesh(team,label,gk){ const g=new THREE.Group(); const T=tcol(team), col=gk?T.l:T.c, dk=T.d;
+  const mB=new THREE.MeshStandardMaterial({color:0x20202a,roughness:.6,metalness:.2});   // 黒い車体
+  const mW=new THREE.MeshStandardMaterial({color:0x0a0a0a,roughness:.85});               // タイヤ
+  const mT=new THREE.MeshStandardMaterial({color:col,roughness:.45,metalness:.35});      // チームカラーのチューブ
+  // 車体・座面・背もたれ・ヘッドレスト
+  tcube(g,mB,2*HX*0.7,0.24,2*HY*0.8,-HX*0.05,0.30,0);
+  tcube(g,mB,0.5,0.12,0.5,-HX*0.1,0.50,0);
+  tcube(g,mB,0.12,0.62,0.52,-HX*0.4,0.80,0);
+  tcube(g,mB,0.16,0.24,0.32,-HX*0.42,1.18,0);    // ヘッドレスト
+  // 後輪(大)・前キャスター(小)
+  for(const s of [-1,1]){ const rw=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.12,16),mW); rw.rotation.x=Math.PI/2; rw.position.set(-HX*0.3,0.2,s*HY*0.82); rw.castShadow=true; g.add(rw);
+    const fw=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,0.08,12),mW); fw.rotation.x=Math.PI/2; fw.position.set(HX*0.45,0.1,s*HY*0.62); g.add(fw); }
+  // 着座選手（チームシャツ）
+  const pg=new THREE.Group(); const torso=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.46,0.44), new THREE.MeshStandardMaterial({color:col,roughness:.85})); torso.position.y=0.8; torso.castShadow=true; pg.add(torso);
+  const ph=new THREE.Mesh(new THREE.SphereGeometry(0.14,12,10), new THREE.MeshStandardMaterial({color:0xf0c8a0})); ph.position.y=1.12; ph.castShadow=true; pg.add(ph);
+  pg.position.set(-HX*0.1,0,0); g.add(pg); g.userData.person=pg;
+  // 緑(チーム色)のチューブ・ガードフレーム：足元を囲む＋前方フットガード
+  const fx=HX+GUARD, bx=-HX-0.04, wz=HY+0.06, tr=0.05;
+  tcube(g,mT,fx-bx,2*tr,2*tr,(fx+bx)/2,0.15,wz); tcube(g,mT,fx-bx,2*tr,2*tr,(fx+bx)/2,0.15,-wz);  // 左右レール(下)
+  tcube(g,mT,2*tr,2*tr,2*wz,bx,0.15,0);                                                          // 後レール
+  tcube(g,mT,2*tr,2*tr,2*wz,fx,0.15,0); tcube(g,mT,2*tr,2*tr,2*wz,fx,0.42,0);                     // 前=フットガード(下/上段)
+  tcube(g,mT,2*tr,0.3,2*tr,fx,0.28,wz); tcube(g,mT,2*tr,0.3,2*tr,fx,0.28,-wz);                    // フットガード縦
+  // 番号(胸)＋状態リング(戦術用)
+  const spr=numberSprite(label,dk); spr.scale.set(0.62,0.62,0.62); spr.position.set(-HX*0.1,1.0,0); g.add(spr); g.userData.sprite=spr;
   const sr=new THREE.Mesh(new THREE.TorusGeometry(0.95,0.06,8,28), new THREE.MeshBasicMaterial({color:0x39d353})); sr.rotation.x=-Math.PI/2; sr.position.y=0.04; sr.visible=false; g.add(sr); g.userData.statusRing=sr;
-  g.traverse(o=>{ if(o.isMesh&&o!==sr)o.castShadow=true; });
   return g; }
 
 function makeRing(color){ const r=new THREE.Mesh(new THREE.TorusGeometry(EDGE*1.05,0.06,8,28), new THREE.MeshBasicMaterial({color})); r.rotation.x=-Math.PI/2; r.position.y=0.06; r.visible=false; scene.add(r); return r; }
