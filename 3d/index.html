@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v12 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
+<title>SFC Delteas 戦術ビューア 3D v13 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
@@ -73,12 +73,12 @@
 </div>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v12 · 2026-06-18</div>
+<div id="ver">3D v13 · 2026-06-18</div>
 <div id="title">
   <div class="emblem">D</div>
   <div class="tt-sub">POWERCHAIR FOOTBALL</div>
   <div class="tt-main">SFC Delteas <span>戦術ビューア</span></div>
-  <div class="tt-ver">3D v12 ・ 電動車椅子サッカー</div>
+  <div class="tt-ver">3D v13 ・ 電動車椅子サッカー</div>
   <button id="startBtn">スタート</button>
   <a href="../2d/" style="margin-top:14px;color:#6fce7e;font-size:14px;text-decoration:none;border:1px solid rgba(111,206,126,.5);border-radius:9px;padding:9px 18px;">🕹 シンプル2D版で遊ぶ →</a>
   <div class="tt-note">クリック／タップで開始（音が有効になります）</div>
@@ -437,7 +437,7 @@ function updateRule(){ // 戦術ボードの3mルール可視化
 }
 function syncMeshes(){
   cs.forEach(c=>{ c.mesh.position.set(mX(c.x+Math.cos(c.th)*REAR),0,mZ(c.y+Math.sin(c.th)*REAR)); c.mesh.rotation.y=-c.th;
-    const hideSelf=(view==='fps'&&c===ctrlBlue); if(c.mesh.userData.person)c.mesh.userData.person.visible=!hideSelf; if(c.mesh.userData.sprite)c.mesh.userData.sprite.visible=!hideSelf; });
+    const hideSelf=(view==='fps'&&c===fpsChair()); if(c.mesh.userData.person)c.mesh.userData.person.visible=!hideSelf; if(c.mesh.userData.sprite)c.mesh.userData.sprite.visible=!hideSelf; });
   if(mode&&mode.ptype==='pass'){ ballMesh.visible=false; pballs.forEach(b=>{ const m=pballMeshes[b.mi]; m.visible=true; m.position.set(mX(b.x),BR,mZ(b.y)); }); }
   else { ballMesh.visible=true; ballMesh.position.set(mX(ball.x),BR,mZ(ball.y)); }
   ringB.visible=!!ctrlBlue&&view!=='fps'; if(ctrlBlue)ringB.position.set(mX(ctrlBlue.x+Math.cos(ctrlBlue.th)*REAR),0.06,mZ(ctrlBlue.y+Math.sin(ctrlBlue.th)*REAR));
@@ -453,9 +453,11 @@ function syncMeshes(){
 
 // ===== カメラ =====
 let view='over', orient='land';
+function fpsChair(){ return ctrlBlue||selected||cs.find(x=>x.tm==='blue'&&x.role!=='gk')||cs[0]||null; }  // 戦術中(停止)も視点対象を確保
 function updateCamera(){
   const zt=zoomMode?(zoomMode===1?-L/4:L/4):0; const z=zt!==0;  // 拡大は全モードで有効
-  if(view==='fps'&&ctrlBlue){ const c=ctrlBlue, yaw=c.th+eyeYaw;
+  const _fc=fpsChair();
+  if(view==='fps'&&_fc){ const c=_fc, yaw=c.th+eyeYaw;
     // 目線を座席(幾何中心の少し後ろ)・上に置き、常に自分の車椅子前方(ガード)が下に映るようにする
     const gx=c.x+Math.cos(c.th)*REAR, gy=c.y+Math.sin(c.th)*REAR;
     const ex=mX(gx)-Math.cos(c.th)*0.25, ez=mZ(gy)-Math.sin(c.th)*0.25, ey=1.55;
