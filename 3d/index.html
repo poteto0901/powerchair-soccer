@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v18 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
+<title>SFC Delteas 戦術ビューア 3D v19 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
@@ -73,12 +73,12 @@
 </div>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v18 · 2026-06-18</div>
+<div id="ver">3D v19 · 2026-06-18</div>
 <div id="title">
   <div class="emblem">D</div>
   <div class="tt-sub">POWERCHAIR FOOTBALL</div>
   <div class="tt-main">SFC Delteas <span>戦術ビューア</span></div>
-  <div class="tt-ver">3D v18 ・ 電動車椅子サッカー</div>
+  <div class="tt-ver">3D v19 ・ 電動車椅子サッカー</div>
   <button id="startBtn">スタート</button>
   <a href="../2d/" style="margin-top:14px;color:#6fce7e;font-size:14px;text-decoration:none;border:1px solid rgba(111,206,126,.5);border-radius:9px;padding:9px 18px;">🕹 シンプル2D版で遊ぶ →</a>
   <div class="tt-note">クリック／タップで開始（音が有効になります）</div>
@@ -121,10 +121,10 @@ const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.0;  // 白飛び防止
-const scene=new THREE.Scene(); scene.background=new THREE.Color(0x1a1f28);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x2b323d);
 const camera=new THREE.PerspectiveCamera(55,1,0.05,400);
-scene.add(new THREE.HemisphereLight(0xffffff,0x555a60,0.65));   // エコパ風に明るく
-scene.add(new THREE.AmbientLight(0xffffff,0.4));
+scene.add(new THREE.HemisphereLight(0xffffff,0x8b9099,0.85));   // エコパ風に明るく（天井・壁も明るく）
+scene.add(new THREE.AmbientLight(0xffffff,0.55));
 // 天井灯（上から）＋影
 const dl=new THREE.DirectionalLight(0xffffff,0.8); dl.position.set(4,32,8); dl.castShadow=true;
 dl.shadow.mapSize.set(2048,2048); dl.shadow.camera.near=2; dl.shadow.camera.far=90;
@@ -144,12 +144,12 @@ const gymTex=woodTex('#d6b475'); gymTex.repeat.set(HALLX/3,HALLZ/3);   // 明る
 const gymFloor=new THREE.Mesh(new THREE.PlaneGeometry(HALLX,HALLZ), new THREE.MeshStandardMaterial({map:gymTex,roughness:.7,metalness:.03}));
 gymFloor.rotation.x=-Math.PI/2; gymFloor.position.y=-0.02; gymFloor.receiveShadow=true; scene.add(gymFloor);
 // 外周のグレーコンクリート腰壁（アリーナ床の縁を囲む）
-const wallMat=new THREE.MeshStandardMaterial({color:0x9a9ba0,roughness:1});
+const wallMat=new THREE.MeshStandardMaterial({color:0xcccdd2,roughness:1});
 function wall(w,d,x,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,d),wallMat); m.position.set(x,1.7,z); scene.add(m); }
 wall(HALLX,0.4,0,-HALLZ/2); wall(HALLX,0.4,0,HALLZ/2); wall(0.4,HALLZ,-HALLX/2,0); wall(0.4,HALLZ,HALLX/2,0);
 // 段状スタンド：腰壁の外・高い位置から後方へ立ち上がるスタジアム型ボウル（ティール席＋グレー立上り）
 (function buildStands(){ const seatMat=new THREE.MeshStandardMaterial({color:0x2f7d6e,roughness:.85});
-  const fasciaMat=new THREE.MeshStandardMaterial({color:0xc2c4c9,roughness:.95});
+  const fasciaMat=new THREE.MeshStandardMaterial({color:0xdcdee2,roughness:.95});
   const rows=8, step=1.4, rise=0.75, y0=3.4, back=1.2, WX=HALLX+22, WZ=HALLZ+22;
   for(const s of [1,-1]) for(let r=0;r<rows;r++){ const z=s*(HALLZ/2+back+r*step), y=y0+r*rise;   // 長辺(±z)
     const f=new THREE.Mesh(new THREE.BoxGeometry(WX,rise,step),fasciaMat); f.position.set(0,y,z); scene.add(f);
@@ -160,7 +160,7 @@ wall(HALLX,0.4,0,-HALLZ/2); wall(HALLX,0.4,0,HALLZ/2); wall(0.4,HALLZ,-HALLX/2,0
 })();
 // エコパ風の緩やかなアーチ天井（明るいグレー・高い位置。俯瞰では天井より上にカメラがあり隠れ、1人称で見上げると見える）
 (function buildRoof(){ const R=55;
-  const roof=new THREE.Mesh(new THREE.CylinderGeometry(R,R,HALLZ+30,64,1,true,Math.PI,Math.PI), new THREE.MeshStandardMaterial({color:0xdadde1,roughness:.95,metalness:.03,side:THREE.BackSide}));
+  const roof=new THREE.Mesh(new THREE.CylinderGeometry(R,R,HALLZ+30,64,1,true,Math.PI,Math.PI), new THREE.MeshStandardMaterial({color:0xeef0f3,roughness:.95,metalness:.03,side:THREE.BackSide,emissive:0xf2f4f7,emissiveIntensity:0.12}));
   roof.rotation.x=Math.PI/2; roof.position.set(0,20-R,0); scene.add(roof);
 })(); // 梁は俯瞰カメラの視線に縦帯として写り込むため省略。アーチ天井のみ（1人称で見上げると見える）
 
