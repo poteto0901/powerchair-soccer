@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v16 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
+<title>SFC Delteas 戦術ビューア 3D v17 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
@@ -73,12 +73,12 @@
 </div>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v16 · 2026-06-18</div>
+<div id="ver">3D v17 · 2026-06-18</div>
 <div id="title">
   <div class="emblem">D</div>
   <div class="tt-sub">POWERCHAIR FOOTBALL</div>
   <div class="tt-main">SFC Delteas <span>戦術ビューア</span></div>
-  <div class="tt-ver">3D v16 ・ 電動車椅子サッカー</div>
+  <div class="tt-ver">3D v17 ・ 電動車椅子サッカー</div>
   <button id="startBtn">スタート</button>
   <a href="../2d/" style="margin-top:14px;color:#6fce7e;font-size:14px;text-decoration:none;border:1px solid rgba(111,206,126,.5);border-radius:9px;padding:9px 18px;">🕹 シンプル2D版で遊ぶ →</a>
   <div class="tt-note">クリック／タップで開始（音が有効になります）</div>
@@ -121,12 +121,12 @@ const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.0;  // 白飛び防止
-const scene=new THREE.Scene(); scene.background=new THREE.Color(0x10131c);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x1a1f28);
 const camera=new THREE.PerspectiveCamera(55,1,0.05,400);
-scene.add(new THREE.HemisphereLight(0xffffff,0x444448,0.45));
-scene.add(new THREE.AmbientLight(0xffffff,0.25));
+scene.add(new THREE.HemisphereLight(0xffffff,0x555a60,0.65));   // エコパ風に明るく
+scene.add(new THREE.AmbientLight(0xffffff,0.4));
 // 天井灯（上から）＋影
-const dl=new THREE.DirectionalLight(0xffffff,0.7); dl.position.set(4,32,8); dl.castShadow=true;
+const dl=new THREE.DirectionalLight(0xffffff,0.8); dl.position.set(4,32,8); dl.castShadow=true;
 dl.shadow.mapSize.set(2048,2048); dl.shadow.camera.near=2; dl.shadow.camera.far=90;
 dl.shadow.camera.left=-22; dl.shadow.camera.right=22; dl.shadow.camera.top=16; dl.shadow.camera.bottom=-16; dl.shadow.bias=-0.0006;
 scene.add(dl);
@@ -145,6 +145,21 @@ gymFloor.rotation.x=-Math.PI/2; gymFloor.position.y=-0.02; gymFloor.receiveShado
 const wallMat=new THREE.MeshStandardMaterial({color:0x3a3f4a,roughness:1});
 function wall(w,d,x,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,3,d),wallMat); m.position.set(x,1.5,z); scene.add(m); }
 wall(HALLX,0.3,0,-HALLZ/2); wall(HALLX,0.3,0,HALLZ/2); wall(0.3,HALLZ,-HALLX/2,0); wall(0.3,HALLZ,HALLX/2,0);
+// エコパアリーナ風：緑のひな壇スタンド（4面に段々の観客席）
+(function buildStands(){ const seatMat=new THREE.MeshStandardMaterial({color:0x2f7d6e,roughness:.85}); const stepMat=new THREE.MeshStandardMaterial({color:0x3a3f4a,roughness:.9});
+  const rows=6, step=1.0, rise=0.42;
+  for(const s of [1,-1]) for(let r=0;r<rows;r++){ const z=s*(Wd/2+0.9+r*step), y=0.12+r*rise;
+    const base=new THREE.Mesh(new THREE.BoxGeometry(L+9,rise,step),stepMat); base.position.set(0,y,z); base.receiveShadow=true; scene.add(base);
+    const seat=new THREE.Mesh(new THREE.BoxGeometry(L+9,0.14,step*0.55),seatMat); seat.position.set(0,y+rise/2+0.07,z-s*step*0.15); scene.add(seat); }
+  for(const s of [1,-1]) for(let r=0;r<rows;r++){ const x=s*(L/2+0.9+r*step), y=0.12+r*rise;
+    const base=new THREE.Mesh(new THREE.BoxGeometry(step,rise,Wd+9),stepMat); base.position.set(x,y,0); base.receiveShadow=true; scene.add(base);
+    const seat=new THREE.Mesh(new THREE.BoxGeometry(step*0.55,0.14,Wd+9),seatMat); seat.position.set(x-s*step*0.15,y+rise/2+0.07,0); scene.add(seat); }
+})();
+// エコパアリーナ風：木目のアーチ天井＋トップライト
+(function buildRoof(){ const R=30;
+  const roof=new THREE.Mesh(new THREE.CylinderGeometry(R,R,HALLZ+16,48,1,true,Math.PI,Math.PI), new THREE.MeshStandardMaterial({color:0xc9b48c,roughness:.92,metalness:.05,side:THREE.BackSide}));
+  roof.rotation.x=Math.PI/2; roof.position.set(0,14-R,0); scene.add(roof);
+})(); // トップライトは俯瞰カメラ(天井より上)で巨大な白帯に見えたため削除。木目アーチは1人称で頭上に見える
 
 // 共用の簡易人物（観客・運営・選手）
 function makePerson(shirt){ const g=new THREE.Group();
@@ -174,12 +189,12 @@ function courtTexture(){ const c=document.createElement('canvas'); const S=40; c
   x.strokeStyle='rgba(255,255,255,.95)'; x.lineWidth=5; x.strokeRect(10,10,c.width-20,c.height-20);
   x.beginPath(); x.moveTo(c.width/2,10); x.lineTo(c.width/2,c.height-10); x.stroke();
   x.beginPath(); x.arc(c.width/2,c.height/2,3*S,0,7); x.stroke();
-  // コーナーアーク(1/4円・各隅)
-  const cr=0.9*S, W=c.width, H=c.height;
-  x.beginPath(); x.arc(10,10,cr,0,Math.PI/2); x.stroke();                       // 左上
-  x.beginPath(); x.arc(W-10,10,cr,Math.PI/2,Math.PI); x.stroke();               // 右上
-  x.beginPath(); x.arc(10,H-10,cr,Math.PI*1.5,Math.PI*2); x.stroke();           // 左下
-  x.beginPath(); x.arc(W-10,H-10,cr,Math.PI,Math.PI*1.5); x.stroke();           // 右下
+  // コーナー(直線・各隅を約1mでカット)
+  const d=0.7*S, W=c.width, H=c.height;
+  x.beginPath(); x.moveTo(10+d,10); x.lineTo(10,10+d); x.stroke();               // 左上
+  x.beginPath(); x.moveTo(W-10-d,10); x.lineTo(W-10,10+d); x.stroke();           // 右上
+  x.beginPath(); x.moveTo(10+d,H-10); x.lineTo(10,H-10-d); x.stroke();           // 左下
+  x.beginPath(); x.moveTo(W-10-d,H-10); x.lineTo(W-10,H-10-d); x.stroke();       // 右下
   x.lineWidth=4; x.strokeStyle='rgba(45,138,61,.7)'; x.strokeRect(10,(Wd/2-PB_HALF)*S,PB_DEPTH*S,PB_HALF*2*S);
   x.strokeStyle='rgba(210,74,69,.65)'; x.strokeRect(c.width-10-PB_DEPTH*S,(Wd/2-PB_HALF)*S,PB_DEPTH*S,PB_HALF*2*S);
   const t=new THREE.CanvasTexture(c); t.anisotropy=4; return t; }
