@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>SFC Delteas 戦術ビューア 3D v19 - コーチ/配置問題/保存/ゴール音/スティック改善</title>
+<title>SFC Delteas 戦術ビューア 3D v20 - スイッチ操作アシスト</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;overscroll-behavior:none;background:#0a0a14;color:#fff;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;overflow:hidden;}
@@ -25,6 +25,16 @@
   #joyLabel{position:fixed;right:42px;bottom:200px;font-size:11px;color:rgba(255,255,255,.6);z-index:12;}
   #coach{position:fixed;top:84px;right:10px;max-width:270px;font:12px/1.6 sans-serif;background:rgba(18,36,22,.85);border:1px solid rgba(111,206,126,.45);border-radius:8px;padding:9px 11px;z-index:10;display:none;}
   #coach b{color:#6fce7e;} #coach .qa{color:#ffd24a;}
+  #assistPanel{position:fixed;top:84px;right:10px;max-width:280px;font:13px/1.55 sans-serif;background:rgba(28,24,8,.88);border:1px solid rgba(245,197,24,.65);border-radius:8px;padding:10px 12px;z-index:10;display:none;}
+  #assistPanel b{color:#ffd84a;} #assistPanel .run{color:#8dff9a;} #assistPanel .stop{color:#ffd84a;}
+  #switchPad{position:fixed;left:18px;bottom:64px;width:148px;height:92px;border-radius:18px;border:2px solid rgba(255,255,255,.35);background:rgba(28,24,8,.82);color:#fff;font:700 18px/1.3 inherit;z-index:12;display:none;box-shadow:0 4px 18px rgba(0,0,0,.35);}
+  #switchPad.on{background:#ffd84a;color:#111;border-color:#fff;}
+  @media (max-width:600px){
+    .btn{font-size:13px;padding:8px 10px;}
+    #assistPanel{top:86px;right:10px;max-width:138px;font-size:12px;}
+    #switchPad{left:18px;bottom:132px;width:148px;height:88px;}
+    #hint{bottom:116px;font-size:11px;}
+  }
   #title{position:fixed;inset:0;z-index:50;background:rgba(8,10,18,.97);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;}
   #title .emblem{width:84px;height:84px;border-radius:50%;background:#2d8a3d;color:#fff;font-size:44px;font-weight:700;display:flex;align-items:center;justify-content:center;border:3px solid #6fce7e;margin-bottom:18px;}
   #title .tt-sub{font-size:13px;letter-spacing:4px;color:#6fce7e;}
@@ -51,13 +61,14 @@
 <div class="top">
   <select id="modeSel">
     <optgroup label="── 試合 ──"><option value="1v1">1対1</option><option value="3v3">3対3</option><option value="4v4" selected>4対4 公式</option><option value="2p">2人対戦</option></optgroup>
-    <optgroup label="── 練習 ──"><option value="shoot">シュート練習</option><option value="shoot2">パス&回転シュート</option></optgroup>
+    <optgroup label="── 練習 ──"><option value="switch">スイッチシュート</option><option value="shoot">シュート練習</option><option value="shoot2">パス&回転シュート</option></optgroup>
     <optgroup label="── 戦術 ──"><option value="tac">戦術ボード</option></optgroup>
   </select>
 </div>
 <div id="score">青 0 - 0 赤</div>
 <div id="info"></div>
 <div id="coach"></div>
+<div id="assistPanel"></div>
 <div id="hint"></div>
 <div class="ctl">
   <button class="btn" id="view">視点: 斜め</button>
@@ -65,20 +76,22 @@
   <button class="btn" id="play">一時停止</button>
   <button class="btn" id="reset">配置リセット</button>
   <button class="btn" id="lock">操作: 自動</button>
+  <button class="btn" id="assist">支援: OFF</button>
   <button class="btn" id="zoom">拡大: 全体</button>
   <button class="btn" id="save">保存</button>
   <button class="btn" id="load">呼出</button>
   <button class="btn" id="quiz">問題</button>
   <button class="btn" id="share">共有リンク</button>
 </div>
+<button id="switchPad">Shift<br>自動走行</button>
 <div id="joyLabel">スティック</div>
 <div id="joy"><div id="knob"></div></div>
-<div id="ver">3D v19 · 2026-06-18</div>
+<div id="ver">3D v20 · 2026-07-09</div>
 <div id="title">
   <div class="emblem">D</div>
   <div class="tt-sub">POWERCHAIR FOOTBALL</div>
   <div class="tt-main">SFC Delteas <span>戦術ビューア</span></div>
-  <div class="tt-ver">3D v19 ・ 電動車椅子サッカー</div>
+  <div class="tt-ver">3D v20 ・ スイッチ操作アシスト</div>
   <button id="startBtn">スタート</button>
   <a href="../2d/" style="margin-top:14px;color:#6fce7e;font-size:14px;text-decoration:none;border:1px solid rgba(111,206,126,.5);border-radius:9px;padding:9px 18px;">🕹 シンプル2D版で遊ぶ →</a>
   <div class="tt-note">クリック／タップで開始（音が有効になります）</div>
@@ -252,6 +265,12 @@ const ringB=makeRing(0xf5c518), ringR=makeRing(0xffa030);
 const ballRing=new THREE.Mesh(new THREE.TorusGeometry(3,0.05,8,48), new THREE.MeshBasicMaterial({color:0x33ddff,transparent:true,opacity:0.85})); ballRing.rotation.x=-Math.PI/2; ballRing.position.y=0.03; ballRing.visible=false; scene.add(ballRing);
 // 戦術：向き調整ハンドル
 const aim=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.5,12), new THREE.MeshBasicMaterial({color:0xffdd44})); aim.rotation.x=Math.PI/2; aim.visible=false; scene.add(aim);
+// スイッチ操作アシスト：次に向かう場所と走行ライン
+const assistMark=new THREE.Mesh(new THREE.TorusGeometry(0.55,0.055,8,36), new THREE.MeshBasicMaterial({color:0xffd84a}));
+assistMark.rotation.x=-Math.PI/2; assistMark.position.y=0.08; assistMark.visible=false; scene.add(assistMark);
+const assistLineGeom=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+const assistLine=new THREE.Line(assistLineGeom,new THREE.LineBasicMaterial({color:0xffd84a,transparent:true,opacity:0.85}));
+assistLine.visible=false; scene.add(assistLine);
 const ballMesh=new THREE.Mesh(new THREE.SphereGeometry(BR,22,18), new THREE.MeshStandardMaterial({map:ballTexture(),roughness:.55})); ballMesh.castShadow=true; scene.add(ballMesh);
 const rollAxis=new THREE.Vector3();
 // ===== パス練習用マルチボール（複数同時・各10秒）=====
@@ -275,6 +294,12 @@ function stepPass(dt){ feedTimer+=dt; if(feedTimer>=3){ spawnPball(); feedTimer=
     b.life-=dt; if(b.life<=0)dead=true;   // 10秒で消える(それまで壁で跳ねて残る=複数同時OK)
     if(dead){ pballMeshes[b.mi].visible=false; pballs.splice(i,1); } }
   if(kickCool>0)kickCool-=dt; }
+function nextPracticeShot(success){
+  if(success){ practiceMade++; goalCelebrate(); practiceI++; }
+  else if(mode&&mode.ptype==='switch'){ practiceI++; }
+  if(mode&&mode.ptype==='switch'){ practiceAttempts++; assistDrive=false; switchGuideTimer=0; updateAssistUI(); }
+  placeBallPreset(); feedTimer=0;
+}
 
 // ===== 状態 =====
 let cs=[], ball, sA, sB, mode, paused=false, lastHit=null;
@@ -282,7 +307,8 @@ let ctrlBlue=null, ctrlRed=null, manualSel=null;
 let selected=null, zoomMode=0;        // 戦術：選択駒 / 拡大(0全体1左2右)
 const PRESETS=[{x:L*0.62,y:Wd/2},{x:L*0.58,y:Wd*0.30},{x:L*0.58,y:Wd*0.70},{x:L*0.72,y:Wd*0.5},{x:L*0.54,y:Wd*0.28}]; // 置きシュートの配置
 const PASS_ORIGINS=[{x:L*0.82,y:2.6},{x:L*0.82,y:Wd-2.6},{x:L*0.74,y:3.2},{x:L*0.74,y:Wd-3.2}];                        // パスの出し元(ゴール前から横へ)
-let practiceI=0, practiceMade=0, feedTimer=0;
+let practiceI=0, practiceMade=0, practiceAttempts=0, feedTimer=0;
+let assistMode=false, assistDrive=false, switchGuideTimer=0;
 function placeBallPreset(){
   if(mode&&mode.ptype==='pass'){ const att=cs.find(c=>c.tm==='blue');
     const acx=att?att.x+Math.cos(att.th)*REAR:L*0.78, acy=att?att.y+Math.sin(att.th)*REAR:Wd/2;
@@ -331,27 +357,32 @@ function build(){ cs.forEach(c=>scene.remove(c.mesh)); cs=[]; ctrlBlue=null; ctr
     mkChair('blue',{n:'6',name:'中村(K)'},ax,Wd/2);
     if(mode.ptype==='pass'){ cs[0].th=-Math.PI/2; cs[0].hth=-Math.PI/2; }  // 正面の供給を受け、回転で右ゴールへ流す向き
     mkChair('red',{n:'1',name:'赤GK',gk:true},L*0.92,Wd/2);
-    practiceI=0; practiceMade=0; ball={x:L/2,y:Wd/2,vx:0,vy:0};
+    practiceI=0; practiceMade=0; practiceAttempts=0; ball={x:L/2,y:Wd/2,vx:0,vy:0};
     if(mode.ptype==='pass'){ feedTimer=2.7; } else placeBallPreset(); return; }
   const sl=slots(mode.n);
   ['blue','red'].forEach(team=>{ const lu=lineup(team,mode.n);
     sl.forEach((s,i)=>{ const sx=team==='blue'?s.x:L-s.x; mkChair(team, lu[i]||{n:'?',name:'?'}, sx, s.y); }); });
   ball={x:L/2,y:Wd/2,vx:0,vy:0}; }
 function place(){ cs.forEach(c=>{c.x=c.hx;c.y=c.hy;c.th=(c.hth!==undefined?c.hth:(c.tm==='blue'?0:Math.PI));c.spd=0;c.om=0;c.thr=0;c.turn=0;});
+  if(mode&&mode.ptype==='switch'){ assistDrive=false; switchGuideTimer=0; updateAssistUI(); }
   if(mode&&mode.practice){ placeBallPreset(); } else { ball.x=L/2;ball.y=Wd/2;ball.vx=0;ball.vy=0; } lastHit=null; }
 function start(mk){ mode=mk; sA=0;sB=0; build(); place(); paused=!!mode.tac; selected=null; zoomMode=0; quizActive=false; document.getElementById('zoom').textContent='拡大: 全体';
   setManual(null);  // 既定はボール最寄りに自動追従（操作ボタン/タップで固定も可）
+  if(mode.tac) setAssistMode(false,false);
+  else if(mode.ptype==='switch') setAssistMode(true,false);
+  else updateAssistUI();
   if(mode.practice){ zoomMode=2; document.getElementById('zoom').textContent='拡大: 右ゴール'; }
   document.getElementById('play').textContent=paused?'再生':'一時停止';
   const ms=document.getElementById('modeSel'); if(ms)ms.value=mode.key; updateUI();
   document.getElementById('hint').textContent = mode.practice
-    ? (mode.ptype==='pass' ? 'パス&回転：自分(緑)をドラッグで移動・回転でゴールへ。ボールが連続で飛んでくる。GKもドラッグで動かせる'
+    ? (mode.ptype==='switch' ? 'スイッチシュート：Shiftを1回押すと自動走行、もう1回で停止。ボールの後ろへ回り込んで右ゴールへ狙います'
+       : mode.ptype==='pass' ? 'パス&回転：自分(緑)をドラッグで移動・回転でゴールへ。ボールが連続で飛んでくる。GKもドラッグで動かせる'
        : 'シュート練習：配置ボールに寄って右ゴールへ。GKは動きません。決めると次の配置へ。一時停止中はボールをドラッグで配置')
     : mode.tac
     ? '戦術：駒/ボールをドラッグで移動・前方の黄コーンをドラッグで向き変更。水色=ボール半径3m。3m内に同色2台＝赤(2対1反則)、1台のみ=緑'
     : (mode.twoP? '1P=スティック/WASD ／ 2P=↑↓←→'
     : 'スティック/WASD/↑↓←→で操作。緑機体タップで操作交代。回して端で叩く=スピンキック'); }
-const MODES={'1v1':{key:'1v1',n:1},'3v3':{key:'3v3',n:3},'4v4':{key:'4v4',n:4},'tac':{key:'tac',n:4,tac:true},'2p':{key:'2p',n:3,twoP:true},'shoot':{key:'shoot',n:1,practice:true,ptype:'place'},'shoot2':{key:'shoot2',n:1,practice:true,ptype:'pass'}};
+const MODES={'1v1':{key:'1v1',n:1},'3v3':{key:'3v3',n:3},'4v4':{key:'4v4',n:4},'tac':{key:'tac',n:4,tac:true},'2p':{key:'2p',n:3,twoP:true},'switch':{key:'switch',n:1,practice:true,ptype:'switch'},'shoot':{key:'shoot',n:1,practice:true,ptype:'place'},'shoot2':{key:'shoot2',n:1,practice:true,ptype:'pass'}};
 
 // ===== 物理 =====
 function nA(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
@@ -402,6 +433,49 @@ function aiSteer(c,tx,ty,stop){ const dx=tx-c.x,dy=ty-c.y,d=Math.hypot(dx,dy),an
   if(d<(stop||0.4)){ c.thr=0; c.turn=Math.max(-1,Math.min(1,diff*1.2)); return; }
   if(Math.abs(diff)>2.0){ c.thr=-0.8; c.turn=Math.max(-1,Math.min(1,nA(ang-Math.PI-c.th)*1.8)); }      // 後方=バックで寄せる
   else { c.turn=Math.max(-1,Math.min(1,diff*1.8)); c.thr=Math.abs(diff)<0.9?Math.min(1,0.45+d*0.25):0.15; } }
+function activeAssistBall(c){
+  if(mode&&mode.ptype==='pass'&&pballs.length){
+    let best=pballs[0],bd=1e9; pballs.forEach(b=>{const d=Math.hypot(b.x-c.x,b.y-c.y); if(d<bd){bd=d;best=b;}});
+    return best;
+  }
+  return ball;
+}
+function clampX(x){return Math.max(0.6,Math.min(L-0.6,x));}
+function clampY(y){return Math.max(0.6,Math.min(Wd-0.6,y));}
+function assistGoalY(){ return (mode&&mode.ptype==='switch') ? Wd/2+(practiceI%2===0?-1.9:1.9) : Wd/2; }
+function assistPlan(c){
+  const b=activeAssistBall(c), gx=L-0.2, gy=assistGoalY();
+  const gdx=gx-b.x, gdy=gy-b.y, gl=Math.hypot(gdx,gdy)||1;
+  const bx=b.x-gdx/gl*1.55, by=b.y-gdy/gl*1.55;
+  const db=Math.hypot(c.x-bx,c.y-by), cb=Math.hypot(c.x-b.x,c.y-b.y);
+  if(db>0.7&&cb>1.2) return {x:clampX(bx),y:clampY(by),stop:0.42,label:'ボールの後ろへ'};
+  return {x:clampX(b.x),y:clampY(b.y),stop:0.08,label:'シュート'};
+}
+function assistSteer(c){
+  const p=assistPlan(c), ang=Math.atan2(p.y-c.y,p.x-c.x), diff=nA(ang-c.th);
+  if(!assistDrive){ c.thr=0; c.turn=Math.max(-0.45,Math.min(0.45,diff*0.75)); return; }
+  aiSteer(c,p.x,p.y,p.stop);
+  if(p.label==='シュート'&&Math.abs(diff)<0.55)c.thr=1;
+}
+function applySwitchShotAssist(dt){
+  if(!(mode&&mode.ptype==='switch'&&(assistDrive||switchGuideTimer>0)))return;
+  const sp=Math.hypot(ball.vx,ball.vy);
+  if(sp<0.6||ball.x<L*0.45||ball.vx<=0)return;
+  const dx=L+0.3-ball.x, dy=assistGoalY()-ball.y, d=Math.hypot(dx,dy)||1;
+  const k=Math.min(1,dt*2.4);
+  ball.vx=ball.vx*(1-k)+(dx/d*sp)*k;
+  ball.vy=ball.vy*(1-k)+(dy/d*sp)*k;
+  if(switchGuideTimer>0)switchGuideTimer=Math.max(0,switchGuideTimer-dt);
+}
+function maybeSwitchAutoKick(){
+  const c=ctrlBlue;
+  if(!(mode&&mode.ptype==='switch'&&assistDrive&&c))return;
+  const d=dist(c), ang=Math.atan2(ball.y-c.y,ball.x-c.x), diff=Math.abs(nA(ang-c.th));
+  if(d>1.15||diff>0.9)return;
+  const dx=L+0.3-ball.x, dy=assistGoalY()-ball.y, gl=Math.hypot(dx,dy)||1, sp=4.4;
+  ball.vx=dx/gl*sp; ball.vy=dy/gl*sp;
+  playKick(3.2); switchGuideTimer=2.8; assistDrive=false; updateAssistUI();
+}
 function ai(c,chB,chR){ const ch=c.tm==='blue'?chB:chR;
   if(mode.practice&&c.tm==='red'){ c.thr=0; c.turn=0; return; }   // 練習のGKは動かない
   const ownGoal=c.tm==='blue'?{x:0,y:Wd/2}:{x:L,y:Wd/2};
@@ -422,7 +496,7 @@ function redKeyInput(){ let kx=0,ky=0; if(keys['arrowup'])ky-=1; if(keys['arrowd
 function step(dt){
   ctrlBlue=pickControlled('blue',ctrlBlue); ctrlRed=mode.twoP?pickControlled('red',ctrlRed):null;
   const chB=chaser('blue'), chR=chaser('red'); const hi=humanInput(), ri=mode.twoP?redKeyInput():null;
-  cs.forEach(c=>{ if(c===ctrlBlue){c.thr=hi.thr;c.turn=hi.turn;} else if(c===ctrlRed){c.thr=ri.thr;c.turn=ri.turn;} else ai(c,chB,chR); });
+  cs.forEach(c=>{ if(c===ctrlBlue){ if(assistMode&&!mode.tac)assistSteer(c); else {c.thr=hi.thr;c.turn=hi.turn;} } else if(c===ctrlRed){c.thr=ri.thr;c.turn=ri.turn;} else ai(c,chB,chR); });
   if(mode.ptype==='pass'&&ctrlBlue)ctrlBlue.thr=0;   // パス回転練習は移動せず回転だけ
   cs.forEach(c=>updChair(c,dt)); sep();
   ball.x+=ball.vx*dt; ball.y+=ball.vy*dt;
@@ -432,11 +506,13 @@ function step(dt){
   cs.forEach(c=>resolve(c,ball));
   const postSp=Math.hypot(ball.vx,ball.vy);
   if(postSp-preSp>0.4&&kickCool<=0){ playKick(postSp-preSp); kickCool=0.08; }   // 相手の接触でも鳴る
+  maybeSwitchAutoKick();
+  applySwitchShotAssist(dt);
   if(kickCool>0)kickCool-=dt;
   // ゴール ＆ ライン外＝出た地点で停止して再スタート
   if(mode.practice){
-    if(ball.x+BR>L && ball.y>gTop && ball.y<gBot){ practiceMade++; goalCelebrate(); practiceI++; placeBallPreset(); feedTimer=0; return; }   // 決めたら次へ
-    if(ball.x+BR>L||ball.x-BR<0||ball.y-BR<0||ball.y+BR>Wd){ placeBallPreset(); feedTimer=0; return; }                          // 外したら次へ
+    if(ball.x+BR>L && ball.y>gTop && ball.y<gBot){ nextPracticeShot(true); return; }   // 決めたら次へ
+    if(ball.x+BR>L||ball.x-BR<0||ball.y-BR<0||ball.y+BR>Wd){ nextPracticeShot(false); return; }                          // 外したら次へ
     if(mode.ptype==='pass'){ feedTimer+=dt; if(feedTimer>=3 || (feedTimer>0.6 && Math.hypot(ball.vx,ball.vy)<0.3)){ placeBallPreset(); feedTimer=0; } }  // 3秒ごと(or止まれば)に角度を変えて供給
   } else {
     if(ball.x-BR<0){ if(ball.y>gTop&&ball.y<gBot){sA++;goalCelebrate();place();return;} ball.x=BR+0.02; ball.vx=0;ball.vy=0; }
@@ -459,6 +535,21 @@ function updateRule(){ // 戦術ボードの3mルール可視化
     near.forEach(c=>{ const sr=c.mesh.userData.statusRing; sr.visible=true; sr.material.color.setHex(near.length>=2?0xe24b4a:0x39d353); });
   });
 }
+function updateAssistVisual(){
+  const c=ctrlBlue||cs.find(x=>x.tm==='blue'&&x.num==='6')||cs.find(x=>x.tm==='blue');
+  const show=!!(assistMode&&!mode.tac&&c);
+  assistMark.visible=show; assistLine.visible=show;
+  if(!show)return;
+  const p=assistPlan(c);
+  assistMark.position.set(mX(p.x),0.08,mZ(p.y));
+  assistMark.material.color.setHex(assistDrive?0x8dff9a:0xffd84a);
+  assistLine.material.color.setHex(assistDrive?0x8dff9a:0xffd84a);
+  const a=assistLine.geometry.attributes.position;
+  a.setXYZ(0,mX(c.x+Math.cos(c.th)*REAR),0.12,mZ(c.y+Math.sin(c.th)*REAR));
+  a.setXYZ(1,mX(p.x),0.12,mZ(p.y));
+  a.needsUpdate=true;
+  updateAssistUI(p);
+}
 function syncMeshes(){
   cs.forEach(c=>{ c.mesh.position.set(mX(c.x+Math.cos(c.th)*REAR),0,mZ(c.y+Math.sin(c.th)*REAR)); c.mesh.rotation.y=-c.th;
     const hideSelf=(view==='fps'&&c===fpsChair()); if(c.mesh.userData.person)c.mesh.userData.person.visible=!hideSelf; if(c.mesh.userData.sprite)c.mesh.userData.sprite.visible=!hideSelf; });
@@ -469,8 +560,12 @@ function syncMeshes(){
   const tac=!!(mode&&mode.tac);
   aim.visible=tac&&!!selected; if(tac&&selected){ aim.position.set(mX(selected.x+Math.cos(selected.th)*1.5),0.3,mZ(selected.y+Math.sin(selected.th)*1.5)); aim.rotation.set(Math.PI/2,0,-selected.th-Math.PI/2); }
   updateRule();
+  updateAssistVisual();
   const cp=document.getElementById('coach'); if(tac){ cp.style.display='block'; cp.innerHTML=coachHTML(); } else cp.style.display='none';
-  document.getElementById('score').textContent = mode.practice ? ((mode.ptype==='pass'?'パス&回転シュート　':'シュート練習　')+'成功 '+practiceMade+' 本') : ('緑 '+sA+' - '+sB+' 赤   '+mode.n+'対'+mode.n);
+  document.getElementById('score').textContent = mode.practice
+    ? (mode.ptype==='switch' ? ('スイッチシュート　成功 '+practiceMade+' / '+practiceAttempts+' 本')
+      : ((mode.ptype==='pass'?'パス&回転シュート　':'シュート練習　')+'成功 '+practiceMade+' 本'))
+    : ('緑 '+sA+' - '+sB+' 赤   '+mode.n+'対'+mode.n);
   if(tac&&selected){ const d=dist(selected).toFixed(1); document.getElementById('info').innerHTML='選択: #'+selected.num+' '+selected.name+'<br>ボールまで '+d+' m '+(selected.role==='gk'&&inOwnBox(selected)?'(GK例外)':(dist(selected)<3?'(3m内)':'(3m外)'))+'<br>向き調整=黄コーンをドラッグ'; }
   else { const c=ctrlBlue; if(c)document.getElementById('info').innerHTML='操作: #'+c.num+' '+c.name+'<br>車速 '+Math.abs(c.spd).toFixed(1)+' m/s<br>回転 '+c.om.toFixed(1)+' rad/s<br>ボール '+Math.hypot(ball.vx,ball.vy).toFixed(1)+' m/s'; }
 }
@@ -543,7 +638,8 @@ function loop(t){ let dt=(t-last)/1000; last=t; dt=Math.min(dt,0.05);
   motorAudio(); syncMeshes(); updateCamera(); renderer.render(scene,camera); requestAnimationFrame(loop); }
 
 // ===== 入力 =====
-addEventListener('keydown',e=>{const k=e.key.toLowerCase(); if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){keys[k]=true;e.preventDefault();}});
+addEventListener('keydown',e=>{ if(e.key==='Shift'&&assistMode&&mode&&!mode.tac){ if(!e.repeat){assistDrive=!assistDrive;updateAssistUI();} e.preventDefault(); return; }
+  const k=e.key.toLowerCase(); if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){keys[k]=true;e.preventDefault();}});
 addEventListener('keyup',e=>{const k=e.key.toLowerCase(); if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){keys[k]=false;}});
 const joyEl=document.getElementById('joy'), knob=document.getElementById('knob'); const JR=78;
 function joySet(ev){ const r=joyEl.getBoundingClientRect(); let dx=ev.clientX-(r.left+r.width/2), dy=ev.clientY-(r.top+r.height/2);
@@ -557,16 +653,37 @@ window.addEventListener('pointerup',e=>{ if(joyId!==null&&e.pointerId===joyId){ 
 window.addEventListener('pointercancel',e=>{ if(joyId!==null&&e.pointerId===joyId){ joyId=null; joyEnd(); } });
 
 document.getElementById('modeSel').addEventListener('change',function(){ start(MODES[this.value]); });
+function setAssistMode(on,drive){
+  assistMode=!!on; assistDrive=!!drive;
+  updateAssistUI();
+}
+function updateAssistUI(plan){
+  const btn=document.getElementById('assist'), pad=document.getElementById('switchPad'), panel=document.getElementById('assistPanel');
+  if(btn){ btn.textContent='支援: '+(assistMode?'ON':'OFF'); btn.classList.toggle('on',assistMode); }
+  const usable=!!(assistMode&&mode&&!mode.tac);
+  if(joyEl)joyEl.style.display=usable?'none':'';
+  const jl=document.getElementById('joyLabel'); if(jl)jl.style.display=usable?'none':'';
+  const hintEl=document.getElementById('hint'); if(hintEl)hintEl.style.display=usable?'none':'';
+  if(pad){ pad.style.display=usable?'block':'none'; pad.classList.toggle('on',assistDrive); pad.innerHTML=(assistDrive?'走行中':'Shift')+'<br>'+(assistDrive?'停止':'自動走行'); }
+  if(panel){
+    panel.style.display=usable?'block':'none';
+    if(usable) panel.innerHTML='<b>Shiftアシスト</b><br><span class="'+(assistDrive?'run':'stop')+'">'+(assistDrive?'自動走行中':'待機中')+'</span><br>次: '+(plan?plan.label:'ボールへ');
+  }
+  if(!usable){ assistMark.visible=false; assistLine.visible=false; }
+}
 function updateUI(){ const isTac=!!mode.tac, isPrac=!!mode.practice, isMatch=!isTac&&!isPrac;
   const sh=(id,v)=>{const e=document.getElementById(id);if(e)e.style.display=v?'':'none';};
-  sh('lock',isMatch); sh('zoom',isTac||isPrac); sh('save',isTac); sh('load',isTac); sh('quiz',isTac); sh('share',isTac); }
+  sh('lock',isMatch); sh('assist',isMatch||isPrac); sh('zoom',isTac||isPrac); sh('save',isTac); sh('load',isTac); sh('quiz',isTac); sh('share',isTac);
+  updateAssistUI(); }
 document.getElementById('play').addEventListener('click',function(){paused=!paused;this.textContent=paused?'再生':'一時停止';});
 document.getElementById('reset').addEventListener('click',()=>place());
 document.getElementById('orient').addEventListener('click',function(){orient=orient==='land'?'port':'land';this.textContent=orient==='land'?'縦型にする':'横型にする';});
 const VIEWS=['top','over','fps'], VLAB={top:'真上',over:'斜め',fps:'1人称'};
 document.getElementById('view').addEventListener('click',function(){ view=VIEWS[(VIEWS.indexOf(view)+1)%VIEWS.length]; if(view==='fps'){eyeYaw=0;eyePitch=-0.45;} this.textContent='視点: '+VLAB[view]; });
 document.getElementById('lock').addEventListener('click',function(){ const list=cs.filter(c=>c.tm==='blue'); let idx=manualSel?list.indexOf(manualSel):-1; idx++; setManual(idx>=list.length?null:list[idx]); });
+document.getElementById('assist').addEventListener('click',function(){ setAssistMode(!assistMode,false); });
 document.getElementById('zoom').addEventListener('click',function(){ zoomMode=(zoomMode+1)%3; this.textContent='拡大: '+['全体','左ゴール','右ゴール'][zoomMode]; });
+document.getElementById('switchPad').addEventListener('click',function(){ if(assistMode){ assistDrive=!assistDrive; updateAssistUI(); initAudio(); } });
 document.getElementById('startBtn').addEventListener('click',()=>{ document.getElementById('title').style.display='none'; initAudio(); });
 function fmGet(){ try{ return JSON.parse(localStorage.getItem('pcf_form')||'[]'); }catch(e){ return []; } }
 function fmRender(){ const list=document.getElementById('fmList'), arr=fmGet(); list.innerHTML='';
